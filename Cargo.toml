@@ -1,0 +1,3 @@
+[workspace]
+members = ["bgpq4", "dig"]
+resolver = "2"

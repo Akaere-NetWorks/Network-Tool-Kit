@@ -1,0 +1,22 @@
+[package]
+name = "bgpq4"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "bgpq4"
+path = "src/main.rs"
+
+[lib]
+name = "bgpq4_lib"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["net", "io-util", "time", "rt-multi-thread", "macros"] }
+thiserror = "1"
+clap = { version = "4", features = ["derive"] }
+ipnet = "2"
+serde_json = "1"
+
+[dev-dependencies]
+tokio-test = "0.4"
