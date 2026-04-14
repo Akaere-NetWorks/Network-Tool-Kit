@@ -1,9 +1,8 @@
 use dig_lib::{
     dns::{build_query, QueryConfig, RecordType},
     printer::{self, PrintOpts, PrintContext},
-    resolver::{self, ResolverConfig},
+    resolver::{self, ResolverConfig, ServerAddr, parse_server},
 };
-use std::net::SocketAddr;
 use std::time::Instant;
 
 const VERSION: &str = "dig 0.1.0 (Network Tool Kit)";
@@ -318,16 +317,19 @@ async fn main() {
         Err(e) => { eprintln!(";; Error: {e}"); std::process::exit(1); }
     };
 
-    let server_host = args.server.as_deref().unwrap_or("8.8.8.8");
-    let server: SocketAddr = format!("{server_host}:{}", args.port)
-        .parse()
-        .unwrap_or_else(|_| {
-            eprintln!(";; Invalid server address: {server_host}");
+    let server_str = args.server.as_deref().unwrap_or("8.8.8.8");
+    let server = parse_server(server_str, args.port)
+        .unwrap_or_else(|e| {
+            eprintln!(";; {e}");
             std::process::exit(1);
         });
+    let server_host = match &server {
+        ServerAddr::UdpTcp(a) => a.to_string(),
+        ServerAddr::Doh(u) => u.clone(),
+    };
 
     if args.trace {
-        run_trace(&args, server_host, server, &cmdline).await;
+        run_trace(&args, &server_host, &server, &cmdline).await;
         return;
     }
 
@@ -350,7 +352,7 @@ async fn main() {
             println!(";; Sending:");
             let tmp_opts = PrintOpts::default();
             let tmp_ctx = PrintContext {
-                opts: &tmp_opts, server: server_host, query_time_ms: None,
+                opts: &tmp_opts, server: &server_host, query_time_ms: None,
                 query_bytes: None, response_bytes: None, server_addr: None,
                 cmdline: None,
             };
@@ -364,7 +366,7 @@ async fn main() {
         }
 
         let start = Instant::now();
-        let result = match resolver::send_query(server, &query, &args.resolver_config).await {
+        let result = match resolver::send_query(&server, &query, &args.resolver_config).await {
             Ok(r) => r,
             Err(e) => { eprintln!(";; {e}"); std::process::exit(1); }
         };
@@ -376,11 +378,11 @@ async fn main() {
 
         let ctx = PrintContext {
             opts: &args.print_opts,
-            server: server_host,
+            server: &server_host,
             query_time_ms: Some(elapsed),
             query_bytes: Some(result.query_bytes),
             response_bytes: Some(result.response_bytes),
-            server_addr: Some(server),
+            server_addr: Some(server_host.clone()),
             cmdline: if args.print_opts.show_cmd { Some(cmdline.clone()) } else { None },
         };
 
@@ -396,7 +398,7 @@ async fn main() {
     }
 }
 
-async fn run_trace(args: &DigArgs, _server_host: &str, _server: SocketAddr, cmdline: &str) {
+async fn run_trace(args: &DigArgs, _server_host: &str, _server: &ServerAddr, cmdline: &str) {
     let queries: Vec<(String, RecordType, u16)> = if let Some(ref rev) = args.reverse {
         vec![(build_reverse_name(rev), RecordType::Ptr, args.class)]
     } else {

@@ -14,6 +14,27 @@ pub enum ResolverError {
     Dns(#[from] DnsError),
     #[error("query timed out after {0} tries")]
     Timeout(u32),
+    #[error("HTTP error: {0}")]
+    Http(#[from] reqwest::Error),
+}
+
+pub enum ServerAddr {
+    UdpTcp(SocketAddr),
+    Doh(String),
+}
+
+pub fn parse_server(s: &str, default_port: u16) -> Result<ServerAddr, String> {
+    if s.starts_with("https://") || s.starts_with("http://") {
+        Ok(ServerAddr::Doh(s.to_string()))
+    } else {
+        let addr = if s.contains(':') {
+            s.parse::<SocketAddr>().map_err(|_| format!("Invalid server address: {s}"))?
+        } else {
+            format!("{s}:{default_port}").parse::<SocketAddr>()
+                .map_err(|_| format!("Invalid server address: {s}"))?
+        };
+        Ok(ServerAddr::UdpTcp(addr))
+    }
 }
 
 pub struct QueryResult {
@@ -45,6 +66,17 @@ impl Default for ResolverConfig {
 }
 
 pub async fn send_query(
+    server: &ServerAddr,
+    query: &[u8],
+    config: &ResolverConfig,
+) -> Result<QueryResult, ResolverError> {
+    match server {
+        ServerAddr::Doh(url) => send_doh(url, query, config.timeout_secs).await,
+        ServerAddr::UdpTcp(addr) => send_udp_tcp(*addr, query, config).await,
+    }
+}
+
+async fn send_udp_tcp(
     server: SocketAddr,
     query: &[u8],
     config: &ResolverConfig,
@@ -125,6 +157,42 @@ async fn send_tcp(
     })
 }
 
+async fn send_doh(
+    url: &str,
+    query: &[u8],
+    timeout_secs: u64,
+) -> Result<QueryResult, ResolverError> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(timeout_secs))
+        .danger_accept_invalid_certs(true)
+        .build()?;
+
+    let resp = client
+        .post(url)
+        .header("Content-Type", "application/dns-message")
+        .header("Accept", "application/dns-message")
+        .body(query.to_vec())
+        .send()
+        .await?;
+
+    let status = resp.status();
+    let url_used = resp.url().to_string();
+    let body = resp.bytes().await?;
+
+    if !status.is_success() {
+        return Err(ResolverError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other, format!("HTTP {status} from {url_used}"),
+        )));
+    }
+
+    let msg = dns::parse_message(&body[..])?;
+    Ok(QueryResult {
+        message: msg,
+        response_bytes: body.len(),
+        query_bytes: query.len(),
+    })
+}
+
 const ROOT_SERVERS: &[&str] = &[
     "198.41.0.4", "199.9.14.201", "192.33.4.12", "199.7.91.13",
     "192.203.230.10", "192.5.5.241", "192.112.36.4", "198.97.190.53",
@@ -149,9 +217,9 @@ pub async fn trace_query(
         if depth >= max_depth { break; }
         depth += 1;
 
-        let server = servers[0];
+        let server = ServerAddr::UdpTcp(servers[0]);
         let query = build_query(name, qtype, cfg);
-        let result = send_query(server, &query, resolver_cfg).await?;
+        let result = send_query(&server, &query, resolver_cfg).await?;
         let msg = &result.message;
 
         results.push(QueryResult {
@@ -199,8 +267,9 @@ pub async fn trace_query(
                     let mut resolve_cfg = QueryConfig::default();
                     resolve_cfg.rd = true;
                     let glue_query = build_query(glue_name, RecordType::A, &resolve_cfg);
+                    let glue_server = ServerAddr::UdpTcp("8.8.8.8:53".parse().unwrap());
                     if let Ok(glue_result) = send_query(
-                        "8.8.8.8:53".parse().unwrap(),
+                        &glue_server,
                         &glue_query,
                         &ResolverConfig::default(),
                     ).await {

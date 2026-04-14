@@ -1,5 +1,4 @@
 use crate::dns::{opcode_name, rcode_name, Message, Rdata, RecordType, ResourceRecord};
-use std::net::SocketAddr;
 
 #[derive(Debug, Clone)]
 pub struct PrintOpts {
@@ -54,7 +53,7 @@ pub struct PrintContext<'a> {
     pub query_time_ms: Option<u64>,
     pub query_bytes: Option<usize>,
     pub response_bytes: Option<usize>,
-    pub server_addr: Option<SocketAddr>,
+    pub server_addr: Option<String>,
     pub cmdline: Option<String>,
 }
 
@@ -209,7 +208,7 @@ pub fn print_short(ctx: &PrintContext, msg: &Message) -> String {
         .map(|rr| {
             let mut s = format_rdata(&rr.rdata, ctx.opts);
             if ctx.opts.show_identify {
-                if let Some(addr) = ctx.server_addr {
+                if let Some(ref addr) = ctx.server_addr {
                     s.push_str(&format!(" from {}", addr));
                 }
             }
