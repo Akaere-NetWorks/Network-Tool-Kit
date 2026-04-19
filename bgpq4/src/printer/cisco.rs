@@ -1,5 +1,5 @@
-use crate::expander::Expander;
 use super::common::{self, FormatCtx};
+use crate::expander::Expander;
 
 pub fn print_prefixlist(out: &mut String, exp: &Expander) {
     let name = exp.config.effective_name();
@@ -9,8 +9,16 @@ pub fn print_prefixlist(out: &mut String, exp: &Expander) {
 
     if exp.tree.is_empty() {
         out.push_str(&format!("! generated prefix-list {name} is empty\n"));
-        let seq_str = if exp.config.sequence > 0 { " seq 1" } else { "" };
-        let default = if exp.config.family == 2 { "0.0.0.0/0" } else { "::/0" };
+        let seq_str = if exp.config.sequence > 0 {
+            " seq 1"
+        } else {
+            ""
+        };
+        let default = if exp.config.family == 2 {
+            "0.0.0.0/0"
+        } else {
+            "::/0"
+        };
         out.push_str(&format!(
             "{ip_str} prefix-list {name}{seq_str} deny {default}\n"
         ));
@@ -67,7 +75,10 @@ pub fn print_xr_prefixlist(out: &mut String, exp: &Expander) {
         let sep = if needs_comma { ",\n " } else { " " };
         if node.is_aggregate {
             if node.aggregate_low > node.prefix.masklen {
-                out.push_str(&format!("{sep}{prefix} ge {} le {}", node.aggregate_low, node.aggregate_hi));
+                out.push_str(&format!(
+                    "{sep}{prefix} ge {} le {}",
+                    node.aggregate_low, node.aggregate_hi
+                ));
             } else {
                 out.push_str(&format!("{sep}{prefix} le {}", node.aggregate_hi));
             }
@@ -88,7 +99,11 @@ pub fn print_arista_prefixlist(out: &mut String, exp: &Expander) {
 
     if exp.tree.is_empty() {
         out.push_str(&format!("! generated prefix-list {name} is empty\n"));
-        let default = if exp.config.family == 2 { "0.0.0.0/0" } else { "::/0" };
+        let default = if exp.config.family == 2 {
+            "0.0.0.0/0"
+        } else {
+            "::/0"
+        };
         out.push_str(&format!(
             "{ip_str} prefix-list {name}\n   seq {} deny {default}\n",
             exp.config.sequence
@@ -160,8 +175,8 @@ pub fn print_eacl(out: &mut String, exp: &Expander) {
                 let wild_addr_be = wild_addr.to_be();
 
                 let mask_hi = 0xffffffffu32 & (0xffffffffu32 << (32 - node.aggregate_low));
-                let wild_mask = (0xffffffffu32 >> node.aggregate_low)
-                    & !(0xffffffffu32 >> node.aggregate_hi);
+                let wild_mask =
+                    (0xffffffffu32 >> node.aggregate_low) & !(0xffffffffu32 >> node.aggregate_hi);
 
                 let wild_addr_ip = std::net::Ipv4Addr::from(wild_addr_be);
                 let mask_ip = std::net::Ipv4Addr::from(mask_hi.to_be());

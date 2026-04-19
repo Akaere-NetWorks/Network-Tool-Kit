@@ -119,7 +119,9 @@ pub fn print_srl_prefixset(out: &mut String, exp: &Expander) {
         }
         let prefix = node.prefix.format_str();
         if !node.is_aggregate {
-            out.push_str(&format!("    prefix {prefix} mask-length-range exact {{ }}\n"));
+            out.push_str(&format!(
+                "    prefix {prefix} mask-length-range exact {{ }}\n"
+            ));
         } else {
             let lo = node.aggregate_low.max(node.prefix.masklen);
             out.push_str(&format!(

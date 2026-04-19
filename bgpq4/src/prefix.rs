@@ -1,6 +1,6 @@
+use crate::report;
 use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
-use crate::report;
 
 const ADDR_BYTES: usize = 16;
 
@@ -39,7 +39,11 @@ impl SxPrefix {
         }
 
         let effective_af = if af == 0 {
-            if mtext.contains(':') { 10 } else { 2 }
+            if mtext.contains(':') {
+                10
+            } else {
+                2
+            }
         } else {
             af
         };
@@ -155,9 +159,7 @@ impl SxPrefix {
 
     pub fn format_addr(&self) -> String {
         if self.family == 2 {
-            let ip = Ipv4Addr::new(
-                self.addrs[0], self.addrs[1], self.addrs[2], self.addrs[3],
-            );
+            let ip = Ipv4Addr::new(self.addrs[0], self.addrs[1], self.addrs[2], self.addrs[3]);
             ip.to_string()
         } else {
             let mut bytes = [0u8; 16];
@@ -531,8 +533,11 @@ impl RadixTree {
             if !self.nodes[idx].is_aggregate {
                 self.nodes[idx].is_aggregate = true;
                 self.nodes[idx].aggregate_low = refine_low;
-                self.nodes[idx].aggregate_hi =
-                    if self.nodes[idx].prefix.family == 2 { 32 } else { 128 };
+                self.nodes[idx].aggregate_hi = if self.nodes[idx].prefix.family == 2 {
+                    32
+                } else {
+                    128
+                };
             } else {
                 self.nodes[idx].aggregate_low = refine_low;
             }
@@ -617,9 +622,31 @@ impl RadixTree {
         }
 
         let (min, max) = if range_part.starts_with('-') {
-            (p.masklen + 1, if maxlen > 0 { maxlen } else { if af == 2 { 32 } else { 128 } })
+            (
+                p.masklen + 1,
+                if maxlen > 0 {
+                    maxlen
+                } else {
+                    if af == 2 {
+                        32
+                    } else {
+                        128
+                    }
+                },
+            )
         } else if range_part.starts_with('+') {
-            (p.masklen, if maxlen > 0 { maxlen } else { if af == 2 { 32 } else { 128 } })
+            (
+                p.masklen,
+                if maxlen > 0 {
+                    maxlen
+                } else {
+                    if af == 2 {
+                        32
+                    } else {
+                        128
+                    }
+                },
+            )
         } else if range_part.as_bytes()[0].is_ascii_digit() {
             let mut _end = range_part.len();
             let mut min_val: u32 = 0;
@@ -642,7 +669,15 @@ impl RadixTree {
             }
             if !found_dash {
                 min_val = range_part.parse().unwrap_or(0);
-                max_val = if maxlen > 0 { maxlen } else { if af == 2 { 32 } else { 128 } };
+                max_val = if maxlen > 0 {
+                    maxlen
+                } else {
+                    if af == 2 {
+                        32
+                    } else {
+                        128
+                    }
+                };
             }
             (min_val, max_val)
         } else {
@@ -651,15 +686,28 @@ impl RadixTree {
         };
 
         if min < p.masklen {
-            report::error(&format!("Invalid prefix-range {text}: min {min} < masklen {}", p.masklen));
+            report::error(&format!(
+                "Invalid prefix-range {text}: min {min} < masklen {}",
+                p.masklen
+            ));
             return false;
         }
-        let abs_max = if af == 2 || p.family == 2 { 32u32 } else { 128u32 };
+        let abs_max = if af == 2 || p.family == 2 {
+            32u32
+        } else {
+            128u32
+        };
         if max > abs_max {
-            report::error(&format!("Invalid prefix-range {text}: max {max} > {abs_max}"));
+            report::error(&format!(
+                "Invalid prefix-range {text}: max {max} > {abs_max}"
+            ));
             return false;
         }
-        let eff_max = if max > maxlen && maxlen > 0 { maxlen } else { max };
+        let eff_max = if max > maxlen && maxlen > 0 {
+            maxlen
+        } else {
+            max
+        };
 
         self.insert_specifics(p, min, eff_max);
         true
@@ -688,10 +736,7 @@ impl RadixTree {
                     b'm' => out.push_str(&prefix.compute_mask().format_addr()),
                     b'i' => out.push_str(&prefix.compute_imask().format_addr()),
                     _ => {
-                        report::error(&format!(
-                            "Unknown format char '{}'",
-                            bytes[i + 1] as char
-                        ));
+                        report::error(&format!("Unknown format char '{}'", bytes[i + 1] as char));
                         return out;
                     }
                 }

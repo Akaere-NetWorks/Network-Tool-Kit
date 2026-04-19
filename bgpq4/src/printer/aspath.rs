@@ -170,7 +170,9 @@ pub fn print_cisco_xr_oaspath(out: &mut String, exp: &Expander) {
 
 pub fn print_juniper_aspath(out: &mut String, exp: &Expander) {
     let name = exp.config.effective_name();
-    out.push_str(&format!("policy-options {{\nreplace:\n as-path-group {name} {{\n"));
+    out.push_str(&format!(
+        "policy-options {{\nreplace:\n as-path-group {name} {{\n"
+    ));
 
     let mut nc = 0i32;
     let mut line_no = 0u32;
@@ -178,14 +180,18 @@ pub fn print_juniper_aspath(out: &mut String, exp: &Expander) {
 
     for &asn in &exp.asn_list {
         if !printed_self && asn == exp.config.asnumber && exp.config.asnumber > 0 {
-            out.push_str(&format!("  as-path a{} \"^{}({})*$\";\n", line_no, asn, asn));
+            out.push_str(&format!(
+                "  as-path a{} \"^{}({})*$\";\n",
+                line_no, asn, asn
+            ));
             printed_self = true;
             line_no += 1;
             continue;
         }
 
         if nc == 0 {
-            out.push_str(&format!("  as-path a{} \"^{}(.)*({}",
+            out.push_str(&format!(
+                "  as-path a{} \"^{}(.)*({}",
                 line_no, exp.config.asnumber, asn
             ));
         } else {
@@ -211,7 +217,9 @@ pub fn print_juniper_aspath(out: &mut String, exp: &Expander) {
 
 pub fn print_juniper_oaspath(out: &mut String, exp: &Expander) {
     let name = exp.config.effective_name();
-    out.push_str(&format!("policy-options {{\nreplace:\n as-path-group {name} {{\n"));
+    out.push_str(&format!(
+        "policy-options {{\nreplace:\n as-path-group {name} {{\n"
+    ));
 
     let mut nc = 0i32;
     let mut line_no = 0u32;
@@ -219,16 +227,17 @@ pub fn print_juniper_oaspath(out: &mut String, exp: &Expander) {
 
     for &asn in &exp.asn_list {
         if !printed_self && asn == exp.config.asnumber && exp.config.asnumber > 0 {
-            out.push_str(&format!("  as-path a{} \"^{}({})*$\";\n", line_no, asn, asn));
+            out.push_str(&format!(
+                "  as-path a{} \"^{}({})*$\";\n",
+                line_no, asn, asn
+            ));
             printed_self = true;
             line_no += 1;
             continue;
         }
 
         if nc == 0 {
-            out.push_str(&format!("  as-path a{} \"^(.)*({}",
-                line_no, asn
-            ));
+            out.push_str(&format!("  as-path a{} \"^(.)*({}", line_no, asn));
         } else {
             out.push_str(&format!("|{}", asn));
         }
@@ -252,7 +261,9 @@ pub fn print_juniper_oaspath(out: &mut String, exp: &Expander) {
 
 pub fn print_juniper_aslist(out: &mut String, exp: &Expander) {
     let name = exp.config.effective_name();
-    out.push_str(&format!("policy-options {{\nreplace:\n as-list-group {name} {{\n"));
+    out.push_str(&format!(
+        "policy-options {{\nreplace:\n as-list-group {name} {{\n"
+    ));
 
     let mut nc = 0i32;
     let mut line_no = 0u32;
@@ -339,11 +350,7 @@ pub fn print_json_aspath(out: &mut String, exp: &Expander) {
             ));
             needs_comma = true;
         } else {
-            out.push_str(&format!(
-                "{}{}",
-                if needs_comma { "," } else { "" },
-                asn
-            ));
+            out.push_str(&format!("{}{}", if needs_comma { "," } else { "" }, asn));
             needs_comma = true;
         }
 
@@ -363,7 +370,10 @@ pub fn print_openbgpd_aspath(out: &mut String, exp: &Expander) {
     }
 
     for &asn in &exp.asn_list {
-        out.push_str(&format!("allow from AS {} AS {}\n", exp.config.asnumber, asn));
+        out.push_str(&format!(
+            "allow from AS {} AS {}\n",
+            exp.config.asnumber, asn
+        ));
     }
 }
 
@@ -454,7 +464,10 @@ pub fn print_nokia_oaspath(out: &mut String, exp: &Expander) {
 
     for &asn in &exp.asn_list {
         if !printed_self && asn == exp.config.asnumber && exp.config.asnumber > 0 {
-            out.push_str(&format!("  entry {} expression \"{}+\"\n", line_no, exp.config.asnumber));
+            out.push_str(&format!(
+                "  entry {} expression \"{}+\"\n",
+                line_no, exp.config.asnumber
+            ));
             printed_self = true;
             line_no += 1;
             continue;
@@ -483,7 +496,9 @@ pub fn print_nokia_oaspath(out: &mut String, exp: &Expander) {
 
 pub fn print_nokia_md_aspath(out: &mut String, exp: &Expander) {
     let name = exp.config.effective_name();
-    out.push_str(&format!("/configure policy-options\ndelete as-path-group \"{name}\"\n"));
+    out.push_str(&format!(
+        "/configure policy-options\ndelete as-path-group \"{name}\"\n"
+    ));
     out.push_str(&format!("as-path-group \"{name}\" {{\n"));
 
     let mut nc = 0i32;
@@ -492,14 +507,20 @@ pub fn print_nokia_md_aspath(out: &mut String, exp: &Expander) {
 
     for &asn in &exp.asn_list {
         if !printed_self && asn == exp.config.asnumber && exp.config.asnumber > 0 {
-            out.push_str(&format!("  entry {} {{\n    expression \"{}+\"\n  }}\n", line_no, asn));
+            out.push_str(&format!(
+                "  entry {} {{\n    expression \"{}+\"\n  }}\n",
+                line_no, asn
+            ));
             printed_self = true;
             line_no += 1;
             continue;
         }
 
         if nc == 0 {
-            out.push_str(&format!("  entry {} {{\n    expression \"{}.*[{}\"", line_no, exp.config.asnumber, asn));
+            out.push_str(&format!(
+                "  entry {} {{\n    expression \"{}.*[{}\"",
+                line_no, exp.config.asnumber, asn
+            ));
         } else {
             out.push_str(&format!(" {}", asn));
         }
@@ -521,7 +542,9 @@ pub fn print_nokia_md_aspath(out: &mut String, exp: &Expander) {
 
 pub fn print_nokia_md_oaspath(out: &mut String, exp: &Expander) {
     let name = exp.config.effective_name();
-    out.push_str(&format!("/configure policy-options\ndelete as-path-group \"{name}\"\n"));
+    out.push_str(&format!(
+        "/configure policy-options\ndelete as-path-group \"{name}\"\n"
+    ));
     out.push_str(&format!("as-path-group \"{name}\" {{\n"));
 
     let mut nc = 0i32;
@@ -530,14 +553,20 @@ pub fn print_nokia_md_oaspath(out: &mut String, exp: &Expander) {
 
     for &asn in &exp.asn_list {
         if !printed_self && asn == exp.config.asnumber && exp.config.asnumber > 0 {
-            out.push_str(&format!("  entry {} {{\n    expression \"{}+\"\n  }}\n", line_no, asn));
+            out.push_str(&format!(
+                "  entry {} {{\n    expression \"{}+\"\n  }}\n",
+                line_no, asn
+            ));
             printed_self = true;
             line_no += 1;
             continue;
         }
 
         if nc == 0 {
-            out.push_str(&format!("  entry {} {{\n    expression \".*[{}", line_no, asn));
+            out.push_str(&format!(
+                "  entry {} {{\n    expression \".*[{}",
+                line_no, asn
+            ));
         } else {
             out.push_str(&format!(" {}", asn));
         }

@@ -1,9 +1,9 @@
+use crate::dns::{self, build_query, DnsError, Message, QueryConfig, RecordType};
 use std::net::SocketAddr;
 use std::time::Duration;
-use crate::dns::{self, DnsError, Message, QueryConfig, RecordType, build_query};
 use thiserror::Error;
-use tokio::net::{TcpStream, UdpSocket};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpStream, UdpSocket};
 use tokio::time::timeout;
 
 #[derive(Error, Debug)]
@@ -28,9 +28,11 @@ pub fn parse_server(s: &str, default_port: u16) -> Result<ServerAddr, String> {
         Ok(ServerAddr::Doh(s.to_string()))
     } else {
         let addr = if s.contains(':') {
-            s.parse::<SocketAddr>().map_err(|_| format!("Invalid server address: {s}"))?
+            s.parse::<SocketAddr>()
+                .map_err(|_| format!("Invalid server address: {s}"))?
         } else {
-            format!("{s}:{default_port}").parse::<SocketAddr>()
+            format!("{s}:{default_port}")
+                .parse::<SocketAddr>()
                 .map_err(|_| format!("Invalid server address: {s}"))?
         };
         Ok(ServerAddr::UdpTcp(addr))
@@ -81,7 +83,11 @@ async fn send_udp_tcp(
     query: &[u8],
     config: &ResolverConfig,
 ) -> Result<QueryResult, ResolverError> {
-    let total_tries = if config.retry > 0 { config.retry + 1 } else { config.tries };
+    let total_tries = if config.retry > 0 {
+        config.retry + 1
+    } else {
+        config.tries
+    };
     let effective_tcp = config.use_tcp;
 
     if effective_tcp {
@@ -92,7 +98,9 @@ async fn send_udp_tcp(
         match timeout(
             Duration::from_secs(config.timeout_secs),
             send_udp(server, query, config.udp_bufsize),
-        ).await {
+        )
+        .await
+        {
             Ok(Ok(result)) => {
                 if result.message.header.is_truncated() && !config.ignore_tc {
                     return send_tcp(server, query, config.timeout_secs).await;
@@ -137,7 +145,9 @@ async fn send_tcp(
     let mut stream = timeout(
         Duration::from_secs(timeout_secs),
         TcpStream::connect(server),
-    ).await.map_err(|_| ResolverError::Timeout(1))??;
+    )
+    .await
+    .map_err(|_| ResolverError::Timeout(1))??;
 
     let len = (query.len() as u16).to_be_bytes();
     stream.write_all(&len).await?;
@@ -181,7 +191,8 @@ async fn send_doh(
 
     if !status.is_success() {
         return Err(ResolverError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other, format!("HTTP {status} from {url_used}"),
+            std::io::ErrorKind::Other,
+            format!("HTTP {status} from {url_used}"),
         )));
     }
 
@@ -194,9 +205,18 @@ async fn send_doh(
 }
 
 const ROOT_SERVERS: &[&str] = &[
-    "198.41.0.4", "199.9.14.201", "192.33.4.12", "199.7.91.13",
-    "192.203.230.10", "192.5.5.241", "192.112.36.4", "198.97.190.53",
-    "192.36.148.17", "192.58.128.30", "193.0.14.129", "199.7.83.42",
+    "198.41.0.4",
+    "199.9.14.201",
+    "192.33.4.12",
+    "199.7.91.13",
+    "192.203.230.10",
+    "192.5.5.241",
+    "192.112.36.4",
+    "198.97.190.53",
+    "192.36.148.17",
+    "192.58.128.30",
+    "193.0.14.129",
+    "199.7.83.42",
     "202.12.27.33",
 ];
 
@@ -207,14 +227,17 @@ pub async fn trace_query(
     resolver_cfg: &ResolverConfig,
 ) -> Result<Vec<QueryResult>, ResolverError> {
     let mut results = Vec::new();
-    let mut servers: Vec<SocketAddr> = ROOT_SERVERS.iter()
+    let mut servers: Vec<SocketAddr> = ROOT_SERVERS
+        .iter()
         .map(|s| format!("{s}:53").parse().unwrap())
         .collect();
     let mut depth = 0;
     let max_depth = 30;
 
     loop {
-        if depth >= max_depth { break; }
+        if depth >= max_depth {
+            break;
+        }
         depth += 1;
 
         let server = ServerAddr::UdpTcp(servers[0]);
@@ -236,7 +259,9 @@ pub async fn trace_query(
             break;
         }
 
-        let ns_records: Vec<&crate::dns::ResourceRecord> = msg.authority.iter()
+        let ns_records: Vec<&crate::dns::ResourceRecord> = msg
+            .authority
+            .iter()
             .filter(|rr| rr.rtype == RecordType::Ns)
             .collect();
 
@@ -268,11 +293,9 @@ pub async fn trace_query(
                     resolve_cfg.rd = true;
                     let glue_query = build_query(glue_name, RecordType::A, &resolve_cfg);
                     let glue_server = ServerAddr::UdpTcp("8.8.8.8:53".parse().unwrap());
-                    if let Ok(glue_result) = send_query(
-                        &glue_server,
-                        &glue_query,
-                        &ResolverConfig::default(),
-                    ).await {
+                    if let Ok(glue_result) =
+                        send_query(&glue_server, &glue_query, &ResolverConfig::default()).await
+                    {
                         for rr in &glue_result.message.answers {
                             if let crate::dns::Rdata::A(addr) = &rr.rdata {
                                 next_servers.push(SocketAddr::new(std::net::IpAddr::V4(*addr), 53));

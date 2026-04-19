@@ -2,7 +2,9 @@ use crate::expander::Expander;
 
 pub fn print_prefixlist(out: &mut String, exp: &Expander) {
     let name = exp.config.effective_name();
-    out.push_str(&format!("policy-options {{\nreplace:\n prefix-list {name} {{\n"));
+    out.push_str(&format!(
+        "policy-options {{\nreplace:\n prefix-list {name} {{\n"
+    ));
 
     exp.tree.foreach(|node| {
         if node.is_glue {
@@ -40,7 +42,11 @@ pub fn print_routefilter(out: &mut String, exp: &Expander) {
 
     let prefixed = true;
     if exp.tree.is_empty() {
-        let default = if exp.config.family == 2 { "0.0.0.0" } else { "::" };
+        let default = if exp.config.family == 2 {
+            "0.0.0.0"
+        } else {
+            "::"
+        };
         out.push_str(&format!("    route-filter {default}/0 orlonger reject;\n"));
     } else {
         exp.tree.foreach(|node| {
@@ -74,10 +80,16 @@ pub fn print_routefilter(out: &mut String, exp: &Expander) {
 
 pub fn print_route_filter_list(out: &mut String, exp: &Expander) {
     let name = exp.config.effective_name();
-    out.push_str(&format!("policy-options {{\nreplace:\n  route-filter-list {name} {{\n"));
+    out.push_str(&format!(
+        "policy-options {{\nreplace:\n  route-filter-list {name} {{\n"
+    ));
 
     if exp.tree.is_empty() {
-        let default = if exp.config.family == 2 { "0.0.0.0" } else { "::" };
+        let default = if exp.config.family == 2 {
+            "0.0.0.0"
+        } else {
+            "::"
+        };
         out.push_str(&format!("    {default}/0 orlonger reject;\n"));
     } else {
         exp.tree.foreach(|node| {

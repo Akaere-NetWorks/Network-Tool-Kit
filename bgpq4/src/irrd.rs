@@ -61,10 +61,16 @@ impl IrrdClient {
         if let Some(ref mut reader) = self.stream {
             reader.read_line(&mut response).await?;
             if !response.trim().starts_with('A') {
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Invalid source list response"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Invalid source list response",
+                ));
             }
-            let count: usize = response.trim()[1..].trim_end_matches('\n').trim_end_matches('\r')
-                .parse().unwrap_or(0);
+            let count: usize = response.trim()[1..]
+                .trim_end_matches('\n')
+                .trim_end_matches('\r')
+                .parse()
+                .unwrap_or(0);
             let mut data = vec![0u8; count];
             reader.read_exact(&mut data).await?;
             let mut term = String::new();
@@ -72,7 +78,10 @@ impl IrrdClient {
             let sources = String::from_utf8_lossy(&data).to_string();
             Ok(sources)
         } else {
-            Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "Not connected"))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::NotConnected,
+                "Not connected",
+            ))
         }
     }
 
@@ -110,10 +119,7 @@ impl IrrdClient {
 
             match code.chars().next() {
                 Some('A') => {
-                    let n: usize = code[1..]
-                        .trim()
-                        .parse()
-                        .map_err(|_| "bad byte count")?;
+                    let n: usize = code[1..].trim().parse().map_err(|_| "bad byte count")?;
                     let mut data = vec![0u8; n];
                     reader.read_exact(&mut data).await?;
                     let mut _term = String::new();
@@ -144,8 +150,7 @@ impl IrrdClient {
 }
 
 impl Drop for IrrdClient {
-    fn drop(&mut self) {
-    }
+    fn drop(&mut self) {}
 }
 
 #[derive(Debug, PartialEq)]

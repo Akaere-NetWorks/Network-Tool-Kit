@@ -1,14 +1,14 @@
-pub mod common;
-pub mod cisco;
-pub mod juniper;
-pub mod bird;
-pub mod openbgpd;
-pub mod nokia;
-pub mod huawei;
-pub mod mikrotik;
-pub mod json;
-pub mod format;
 pub mod aspath;
+pub mod bird;
+pub mod cisco;
+pub mod common;
+pub mod format;
+pub mod huawei;
+pub mod json;
+pub mod juniper;
+pub mod mikrotik;
+pub mod nokia;
+pub mod openbgpd;
 
 use crate::config::Vendor;
 use crate::expander::Expander;

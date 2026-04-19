@@ -8,7 +8,9 @@ pub fn print_prefixlist(out: &mut String, exp: &Expander) {
             exp.config.asnumber
         ));
         if exp.config.asnumber == 0 {
-            out.push_str("# use -a <asn> to generate \"deny from ASN <asn>\" instead of this list\n");
+            out.push_str(
+                "# use -a <asn> to generate \"deny from ASN <asn>\" instead of this list\n",
+            );
         }
     }
 

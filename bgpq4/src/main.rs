@@ -27,7 +27,9 @@ fn usage(ecode: i32) -> ! {
     println!(" -6        : generate IPv6 prefix-lists");
     println!(" -m len    : maximum prefix length (default: 32 for IPv4, 128 for IPv6)");
     println!(" -L depth  : limit recursion depth (default: unlimited)");
-    println!(" -S sources: only use specified IRR sources, in the specified order (comma separated)");
+    println!(
+        " -S sources: only use specified IRR sources, in the specified order (comma separated)"
+    );
     println!(" -w        : 'validate' AS numbers: only accept ones with registered routes");
 
     println!("\nOutput modifiers:");
@@ -226,7 +228,11 @@ fn main() {
             if config.vendor != Vendor::Cisco {
                 vendor_exclusive();
             }
-            config.vendor = if arg == "-K7" { Vendor::Mikrotik7 } else { Vendor::Mikrotik6 };
+            config.vendor = if arg == "-K7" {
+                Vendor::Mikrotik7
+            } else {
+                Vendor::Mikrotik6
+            };
         } else if arg == "-r" {
             i += 1;
             if i >= args.len() {
@@ -286,7 +292,11 @@ fn main() {
             if config.vendor != Vendor::Cisco {
                 vendor_exclusive();
             }
-            config.vendor = if arg == "-n2" { Vendor::NokiaSrl } else { Vendor::NokiaMd };
+            config.vendor = if arg == "-n2" {
+                Vendor::NokiaSrl
+            } else {
+                Vendor::NokiaMd
+            };
         } else if arg == "-p" {
             config.expand_special_asn = true;
         } else if arg == "-t" {
@@ -441,10 +451,12 @@ fn exclusive() -> ! {
 }
 
 fn vendor_exclusive() -> ! {
-    eprintln!("-b (BIRD), -B (OpenBGPD), -F (formatted), -J (Junos), \
+    eprintln!(
+        "-b (BIRD), -B (OpenBGPD), -F (formatted), -J (Junos), \
         -j (JSON), -K[7] (Microtik ROS), -N (Nokia SR OS Classic), \
         -n (Nokia SR OS MD-CLI), -U (Huawei), -u (Huawei XPL), \
-        -e (Arista) and -X (IOS XR) options are mutually exclusive");
+        -e (Arista) and -X (IOS XR) options are mutually exclusive"
+    );
     std::process::exit(1)
 }
 

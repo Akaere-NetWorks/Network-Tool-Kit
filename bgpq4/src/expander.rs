@@ -1,8 +1,8 @@
-use std::collections::{BTreeSet, HashSet};
 use crate::config::{AsnTree, ExpanderConfig, Generation};
 use crate::irrd::{IrrdClient, IrrdResponse};
 use crate::prefix::{RadixTree, SxPrefix};
 use crate::report;
+use std::collections::{BTreeSet, HashSet};
 
 pub struct Expander {
     pub config: ExpanderConfig,
@@ -122,7 +122,10 @@ impl Expander {
         }
 
         let mut aquery = false;
-        if self.config.generation >= Generation::PrefixList && !self.macroses.is_empty() && !self.config.usesource {
+        if self.config.generation >= Generation::PrefixList
+            && !self.macroses.is_empty()
+            && !self.config.usesource
+        {
             aquery = client.check_a_query_support().await.unwrap_or(false);
         }
 
@@ -136,7 +139,11 @@ impl Expander {
         }
 
         if !self.config.sources.is_empty() {
-            if !client.set_sources(&self.config.sources).await.unwrap_or(false) {
+            if !client
+                .set_sources(&self.config.sources)
+                .await
+                .unwrap_or(false)
+            {
                 report::fatal(&format!("Invalid source(s) '{}'", self.config.sources));
             }
         }
@@ -238,8 +245,7 @@ impl Expander {
                         }
                     }
                     Ok(IrrdResponse::NotFound) | Ok(IrrdResponse::Empty) => {
-                        if self.config.validate_asns {
-                        }
+                        if self.config.validate_asns {}
                     }
                     _ => {}
                 }
@@ -273,9 +279,7 @@ impl Expander {
                 return;
             }
 
-            if self.config.maxdepth == 0
-                || (depth + 1 < self.config.maxdepth)
-            {
+            if self.config.maxdepth == 0 || (depth + 1 < self.config.maxdepth) {
                 self.already.insert(lower);
                 let asset = get_asset(as_str);
                 let cmd = format!("!i{asset}\n");
@@ -294,7 +298,9 @@ impl Expander {
             self.add_as(as_str);
         } else if upper == "ANY" {
         } else {
-            report::error(&format!("unexpected object '{as_str}' in expanded_macro_limit"));
+            report::error(&format!(
+                "unexpected object '{as_str}' in expanded_macro_limit"
+            ));
         }
     }
 }

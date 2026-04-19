@@ -1,7 +1,11 @@
 use crate::prefix::RadixNode;
 
 pub fn format_ip_family(family: u8) -> &'static str {
-    if family == 2 { "ip" } else { "ipv6" }
+    if family == 2 {
+        "ip"
+    } else {
+        "ipv6"
+    }
 }
 
 pub struct NodeWalkState {
@@ -28,7 +32,11 @@ pub struct FormatCtx {
 impl FormatCtx {
     pub fn new(name: &str) -> Self {
         FormatCtx {
-            bname: if name.is_empty() { "NN".to_string() } else { name.to_string() },
+            bname: if name.is_empty() {
+                "NN".to_string()
+            } else {
+                name.to_string()
+            },
             seq: 0,
             needs_comma: false,
             jrfilter_prefixed: true,

@@ -1,12 +1,17 @@
-use bgpq4_lib::irrd::{IrrdClient, IrrdResponse};
-use bgpq4_lib::expander::Expander;
 use bgpq4_lib::config::ExpanderConfig;
+use bgpq4_lib::expander::Expander;
+use bgpq4_lib::irrd::{IrrdClient, IrrdResponse};
 
 #[tokio::test]
 #[ignore]
 async fn query_as112_ipv4_routes() {
-    let mut client = IrrdClient::connect("rr.ntt.net", 43).await.expect("connect failed");
-    let resp = client.query_sync("!gAS112\n").await.expect("IRRD query failed");
+    let mut client = IrrdClient::connect("rr.ntt.net", 43)
+        .await
+        .expect("connect failed");
+    let resp = client
+        .query_sync("!gAS112\n")
+        .await
+        .expect("IRRD query failed");
     match resp {
         IrrdResponse::Data(items) => {
             assert!(!items.is_empty(), "AS112 should have IPv4 routes");
@@ -21,8 +26,13 @@ async fn query_as112_ipv4_routes() {
 #[tokio::test]
 #[ignore]
 async fn query_as_as112_set_members() {
-    let mut client = IrrdClient::connect("rr.ntt.net", 43).await.expect("connect failed");
-    let resp = client.query_sync("!iAS-AS112,1\n").await.expect("IRRD query failed");
+    let mut client = IrrdClient::connect("rr.ntt.net", 43)
+        .await
+        .expect("connect failed");
+    let resp = client
+        .query_sync("!iAS-AS112,1\n")
+        .await
+        .expect("IRRD query failed");
     match resp {
         IrrdResponse::Data(items) => {
             assert!(!items.is_empty(), "AS-AS112 should have members");

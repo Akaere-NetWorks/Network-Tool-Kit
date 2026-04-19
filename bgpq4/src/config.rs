@@ -1,5 +1,5 @@
-use std::collections::BTreeSet;
 use crate::report;
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Vendor {
@@ -103,7 +103,11 @@ impl ExpanderConfig {
     }
 
     pub fn effective_name(&self) -> &str {
-        if self.name.is_empty() { "NN" } else { &self.name }
+        if self.name.is_empty() {
+            "NN"
+        } else {
+            &self.name
+        }
     }
 }
 

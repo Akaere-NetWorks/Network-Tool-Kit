@@ -22,13 +22,9 @@ pub fn print_prefixlist(out: &mut String, exp: &Expander) {
             node.prefix.masklen
         };
 
-        let s = exp.tree.format_prefix_fmt(
-            &node.prefix,
-            name,
-            &fmt,
-            agg_low,
-            agg_hi,
-        );
+        let s = exp
+            .tree
+            .format_prefix_fmt(&node.prefix, name, &fmt, agg_low, agg_hi);
         out.push_str(&s);
     });
 

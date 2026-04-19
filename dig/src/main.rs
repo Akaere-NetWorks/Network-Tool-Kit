@@ -1,7 +1,7 @@
 use dig_lib::{
     dns::{build_query, QueryConfig, RecordType},
-    printer::{self, PrintOpts, PrintContext},
-    resolver::{self, ResolverConfig, ServerAddr, parse_server},
+    printer::{self, PrintContext, PrintOpts},
+    resolver::{self, parse_server, ResolverConfig, ServerAddr},
 };
 use std::time::Instant;
 
@@ -51,41 +51,58 @@ fn parse_args(raw: &[String]) -> Result<DigArgs, String> {
         } else if arg == "-6" {
         } else if arg == "-p" {
             i += 1;
-            if i >= raw.len() { return Err("-p requires an argument".into()); }
+            if i >= raw.len() {
+                return Err("-p requires an argument".into());
+            }
             args.port = raw[i].parse().map_err(|_| "invalid port")?;
         } else if arg == "-t" {
             i += 1;
-            if i >= raw.len() { return Err("-t requires an argument".into()); }
+            if i >= raw.len() {
+                return Err("-t requires an argument".into());
+            }
             let t = raw[i].to_uppercase();
             if t == "IXFR" {
                 current_type = Some(RecordType::Ixfr);
             } else {
-                current_type = Some(RecordType::from_str(&t)
-                    .ok_or_else(|| format!("unknown type: {}", raw[i]))?);
+                current_type = Some(
+                    RecordType::from_str(&t).ok_or_else(|| format!("unknown type: {}", raw[i]))?,
+                );
             }
         } else if arg == "-c" {
             i += 1;
-            if i >= raw.len() { return Err("-c requires an argument".into()); }
+            if i >= raw.len() {
+                return Err("-c requires an argument".into());
+            }
             args.class = parse_class(&raw[i].to_uppercase())
                 .ok_or_else(|| format!("unknown class: {}", raw[i]))?;
         } else if arg == "-x" {
             i += 1;
-            if i >= raw.len() { return Err("-x requires an argument".into()); }
+            if i >= raw.len() {
+                return Err("-x requires an argument".into());
+            }
             args.reverse = Some(raw[i].clone());
         } else if arg == "-b" {
             i += 1;
-            if i >= raw.len() { return Err("-b requires an argument".into()); }
+            if i >= raw.len() {
+                return Err("-b requires an argument".into());
+            }
         } else if arg == "-q" {
             i += 1;
-            if i >= raw.len() { return Err("-q requires an argument".into()); }
+            if i >= raw.len() {
+                return Err("-q requires an argument".into());
+            }
             current_name = Some(raw[i].clone());
         } else if arg == "-f" {
             i += 1;
-            if i >= raw.len() { return Err("-f requires an argument".into()); }
+            if i >= raw.len() {
+                return Err("-f requires an argument".into());
+            }
             args.batch_file = Some(raw[i].clone());
         } else if arg == "-k" || arg == "-y" {
             i += 1;
-            if i >= raw.len() { return Err(format!("{arg} requires an argument")); }
+            if i >= raw.len() {
+                return Err(format!("{arg} requires an argument"));
+            }
         } else if arg == "-u" {
             args.use_usec = true;
         } else if arg == "-v" || arg == "--version" {
@@ -188,8 +205,9 @@ fn parse_plus_option(args: &mut DigArgs, flag: &str) -> Result<(), String> {
         "ignore" => args.resolver_config.ignore_tc = !no,
         "header-only" => args.config.header_only = !no,
         "edns" => {
-            if no { args.config.edns = false; }
-            else if let Some(v) = val {
+            if no {
+                args.config.edns = false;
+            } else if let Some(v) = val {
                 args.config.edns = true;
                 args.config.edns_version = v.parse().map_err(|_| "invalid EDNS version")?;
             } else {
@@ -217,7 +235,9 @@ fn parse_plus_option(args: &mut DigArgs, flag: &str) -> Result<(), String> {
         "tries" => {
             if let Some(v) = val {
                 args.resolver_config.tries = v.parse().map_err(|_| "invalid tries")?;
-                if args.resolver_config.tries == 0 { args.resolver_config.tries = 1; }
+                if args.resolver_config.tries == 0 {
+                    args.resolver_config.tries = 1;
+                }
             }
         }
         "timeout" | "time" => {
@@ -250,17 +270,18 @@ fn parse_plus_option(args: &mut DigArgs, flag: &str) -> Result<(), String> {
             }
         }
         "split" => {
-            if no { args.print_opts.split_width = None; }
-            else {
+            if no {
+                args.print_opts.split_width = None;
+            } else {
                 let w = val.and_then(|v| v.parse().ok()).unwrap_or(56);
                 args.print_opts.split_width = Some(w);
             }
         }
-        "keepopen" | "keepalive" | "besteffort" | "fail" | "nssearch" | "showsearch" |
-        "search" | "defname" | "onesoa" | "nsid" | "cookie" | "subnet" | "expire" |
-        "padding" | "ednsnegotiation" | "badcookie" | "showbadcookie" | "showbadvers" |
-        "showtruncated" | "showallmessages" | "dns64prefix" | "idn" | "idnin" | "idnout" |
-        "mapped" | "expandaaaa" | "zoneversion" | "svcparamkeycompat" => {
+        "keepopen" | "keepalive" | "besteffort" | "fail" | "nssearch" | "showsearch" | "search"
+        | "defname" | "onesoa" | "nsid" | "cookie" | "subnet" | "expire" | "padding"
+        | "ednsnegotiation" | "badcookie" | "showbadcookie" | "showbadvers" | "showtruncated"
+        | "showallmessages" | "dns64prefix" | "idn" | "idnin" | "idnout" | "mapped"
+        | "expandaaaa" | "zoneversion" | "svcparamkeycompat" => {
             // acknowledged but not implemented in this version
         }
         _ => return Err(format!("unknown option: +{flag}")),
@@ -291,8 +312,10 @@ fn build_reverse_name(addr: &str) -> String {
     } else {
         let parts: Vec<&str> = addr.split('.').collect();
         if parts.len() == 4 {
-            format!("{}.{}.{}.{}.in-addr.arpa",
-                parts[3], parts[2], parts[1], parts[0])
+            format!(
+                "{}.{}.{}.{}.in-addr.arpa",
+                parts[3], parts[2], parts[1], parts[0]
+            )
         } else {
             format!("{addr}.in-addr.arpa")
         }
@@ -314,15 +337,17 @@ async fn main() {
 
     let args = match parse_args(&raw) {
         Ok(a) => a,
-        Err(e) => { eprintln!(";; Error: {e}"); std::process::exit(1); }
+        Err(e) => {
+            eprintln!(";; Error: {e}");
+            std::process::exit(1);
+        }
     };
 
     let server_str = args.server.as_deref().unwrap_or("8.8.8.8");
-    let server = parse_server(server_str, args.port)
-        .unwrap_or_else(|e| {
-            eprintln!(";; {e}");
-            std::process::exit(1);
-        });
+    let server = parse_server(server_str, args.port).unwrap_or_else(|e| {
+        eprintln!(";; {e}");
+        std::process::exit(1);
+    });
     let server_host = match &server {
         ServerAddr::UdpTcp(a) => a.to_string(),
         ServerAddr::Doh(u) => u.clone(),
@@ -352,23 +377,39 @@ async fn main() {
             println!(";; Sending:");
             let tmp_opts = PrintOpts::default();
             let tmp_ctx = PrintContext {
-                opts: &tmp_opts, server: &server_host, query_time_ms: None,
-                query_bytes: None, response_bytes: None, server_addr: None,
+                opts: &tmp_opts,
+                server: &server_host,
+                query_time_ms: None,
+                query_bytes: None,
+                response_bytes: None,
+                server_addr: None,
                 cmdline: None,
             };
-            let tmp_msg = dig_lib::dns::parse_message(&query).unwrap_or_else(|_| {
-                dig_lib::dns::Message {
-                    header: dig_lib::dns::Header { id: 0, flags: 0, qd_count: 0, an_count: 0, ns_count: 0, ar_count: 0 },
-                    questions: vec![], answers: vec![], authority: vec![], additional: vec![],
-                }
-            });
+            let tmp_msg =
+                dig_lib::dns::parse_message(&query).unwrap_or_else(|_| dig_lib::dns::Message {
+                    header: dig_lib::dns::Header {
+                        id: 0,
+                        flags: 0,
+                        qd_count: 0,
+                        an_count: 0,
+                        ns_count: 0,
+                        ar_count: 0,
+                    },
+                    questions: vec![],
+                    answers: vec![],
+                    authority: vec![],
+                    additional: vec![],
+                });
             print!("{}", printer::print_message(&tmp_ctx, &tmp_msg));
         }
 
         let start = Instant::now();
         let result = match resolver::send_query(&server, &query, &args.resolver_config).await {
             Ok(r) => r,
-            Err(e) => { eprintln!(";; {e}"); std::process::exit(1); }
+            Err(e) => {
+                eprintln!(";; {e}");
+                std::process::exit(1);
+            }
         };
         let elapsed = if args.use_usec {
             start.elapsed().as_micros() as u64
@@ -383,7 +424,11 @@ async fn main() {
             query_bytes: Some(result.query_bytes),
             response_bytes: Some(result.response_bytes),
             server_addr: Some(server_host.clone()),
-            cmdline: if args.print_opts.show_cmd { Some(cmdline.clone()) } else { None },
+            cmdline: if args.print_opts.show_cmd {
+                Some(cmdline.clone())
+            } else {
+                None
+            },
         };
 
         if args.print_opts.short {
@@ -415,11 +460,18 @@ async fn run_trace(args: &DigArgs, _server_host: &str, _server: &ServerAddr, cmd
 
         let results = match resolver::trace_query(name, *qtype, &cfg, &args.resolver_config).await {
             Ok(r) => r,
-            Err(e) => { eprintln!(";; {e}"); std::process::exit(1); }
+            Err(e) => {
+                eprintln!(";; {e}");
+                std::process::exit(1);
+            }
         };
 
         for (idx, result) in results.iter().enumerate() {
-            let server_str = if idx == 0 { "root server" } else { "referred server" };
+            let server_str = if idx == 0 {
+                "root server"
+            } else {
+                "referred server"
+            };
             let ctx = PrintContext {
                 opts: &args.print_opts,
                 server: server_str,
@@ -427,15 +479,25 @@ async fn run_trace(args: &DigArgs, _server_host: &str, _server: &ServerAddr, cmd
                 query_bytes: Some(result.query_bytes),
                 response_bytes: Some(result.response_bytes),
                 server_addr: None,
-                cmdline: if idx == 0 && args.print_opts.show_cmd { Some(cmdline.to_string()) } else { None },
+                cmdline: if idx == 0 && args.print_opts.show_cmd {
+                    Some(cmdline.to_string())
+                } else {
+                    None
+                },
             };
 
             if !args.print_opts.short {
-                println!(";; Received {} bytes from {server_str}", result.response_bytes);
+                println!(
+                    ";; Received {} bytes from {server_str}",
+                    result.response_bytes
+                );
             }
             if args.print_opts.short {
                 let ctx_short = PrintContext {
-                    opts: &PrintOpts { short: true, ..args.print_opts.clone() },
+                    opts: &PrintOpts {
+                        short: true,
+                        ..args.print_opts.clone()
+                    },
                     ..ctx
                 };
                 print!("{}", printer::print_short(&ctx_short, &result.message));

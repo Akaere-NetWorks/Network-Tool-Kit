@@ -1,5 +1,5 @@
-use crate::expander::Expander;
 use super::common;
+use crate::expander::Expander;
 
 pub fn print_prefixlist(out: &mut String, exp: &Expander) {
     let name = exp.config.effective_name();
@@ -7,8 +7,16 @@ pub fn print_prefixlist(out: &mut String, exp: &Expander) {
     out.push_str(&format!("undo ip {ip_str}-prefix {name}\n"));
 
     if exp.tree.is_empty() {
-        let default = if exp.config.family == 2 { "0.0.0.0/0" } else { "::/0" };
-        let seq_str = if exp.config.sequence > 0 { " seq 1" } else { "" };
+        let default = if exp.config.family == 2 {
+            "0.0.0.0/0"
+        } else {
+            "::/0"
+        };
+        let seq_str = if exp.config.sequence > 0 {
+            " seq 1"
+        } else {
+            ""
+        };
         out.push_str(&format!(
             "ip {ip_str}-prefix {name}{seq_str} deny {default}\n"
         ));
@@ -61,10 +69,7 @@ pub fn print_xpl_prefixlist(out: &mut String, exp: &Expander) {
                     node.aggregate_low, node.aggregate_hi
                 ));
             } else {
-                out.push_str(&format!(
-                    "{sep}{prefix_sep} le {}",
-                    node.aggregate_hi
-                ));
+                out.push_str(&format!("{sep}{prefix_sep} le {}", node.aggregate_hi));
             }
         } else {
             out.push_str(&format!("{sep}{prefix_sep}"));
