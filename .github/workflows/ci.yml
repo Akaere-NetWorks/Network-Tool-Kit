@@ -26,6 +26,8 @@ jobs:
   check:
     name: Check & Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -37,7 +39,7 @@ jobs:
           components: clippy, rustfmt
 
       - name: Cache Cargo
-        uses: actions/cache@v4
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: |
             ~/.cargo/registry/index/
@@ -58,12 +60,17 @@ jobs:
         run: cargo test --workspace
 
   # ─────────────────────────────────────────────
-  # 2. 跨平台构建矩阵 + SHA256，bgpq4 / dig 分别上传
+  # 2. 跨平台构建矩阵 + SHA256 + 产物溯源证明
   # ─────────────────────────────────────────────
   build:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     needs: check
+    permissions:
+      contents: read
+      id-token: write      # OIDC token，attest-build-provenance 必须
+      attestations: write  # 写入 GitHub attestation registry
+
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +103,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Cache Cargo
-        uses: actions/cache@v4
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: |
             ~/.cargo/registry/index/
@@ -134,6 +141,13 @@ jobs:
           fi
           cat "bgpq4${{ matrix.ext }}.sha256"
 
+      # TODO: 替换为实际 SHA，运行：
+      #   git ls-remote https://github.com/actions/attest-build-provenance 'refs/tags/v2*'
+      - name: Attest bgpq4
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: dist-bgpq4/bgpq4${{ matrix.ext }}
+
       # artifact 名：binary-target-sha，跨平台 + 跨 commit 全部唯一
       - name: Upload bgpq4
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -157,6 +171,11 @@ jobs:
             shasum -a 256 "dig${{ matrix.ext }}" > "dig${{ matrix.ext }}.sha256"
           fi
           cat "dig${{ matrix.ext }}.sha256"
+
+      - name: Attest dig
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: dist-dig/dig${{ matrix.ext }}
 
       - name: Upload dig
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
