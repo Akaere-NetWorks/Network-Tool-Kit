@@ -387,10 +387,8 @@ fn main() {
                 }
                 _ => {}
             },
-            Generation::AsList => {
-                if config.vendor == Vendor::Juniper {
-                    config.aswidth = 8;
-                }
+            Generation::AsList if config.vendor == Vendor::Juniper => {
+                config.aswidth = 8;
             }
             _ => {}
         }
