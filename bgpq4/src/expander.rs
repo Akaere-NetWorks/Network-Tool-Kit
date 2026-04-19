@@ -240,9 +240,8 @@ impl Expander {
                             }
                         }
                     }
-                    Ok(IrrdResponse::NotFound) | Ok(IrrdResponse::Empty) => {
-                        if self.config.validate_asns {}
-                    }
+                    Ok(IrrdResponse::NotFound) | Ok(IrrdResponse::Empty)
+                        if self.config.validate_asns => {}
                     _ => {}
                 }
             }
