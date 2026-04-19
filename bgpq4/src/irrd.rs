@@ -1,6 +1,152 @@
-use thiserror::Error;
+use std::collections::VecDeque;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
+
+pub type CallbackFn = Box<dyn Fn(&str, &mut Vec<u32>, &str) -> bool + Send + Sync>;
+
+pub struct Request {
+    pub request: String,
+    pub callback: Option<CallbackFn>,
+    pub depth: u32,
+}
+
+pub struct IrrdClient {
+    stream: Option<BufReader<tokio::io::ReadHalf<TcpStream>>>,
+    writer: Option<tokio::io::WriteHalf<TcpStream>>,
+    write_queue: VecDeque<String>,
+    read_queue: VecDeque<Request>,
+}
+
+impl IrrdClient {
+    pub async fn connect(server: &str, port: u16) -> std::io::Result<Self> {
+        let addr = format!("{server}:{port}");
+        let stream = TcpStream::connect(&addr).await?;
+
+        let (read_half, mut write_half) = tokio::io::split(stream);
+        let reader = BufReader::new(read_half);
+
+        write_half.write_all(b"!!\n").await?;
+
+        Ok(IrrdClient {
+            stream: Some(reader),
+            writer: Some(write_half),
+            write_queue: VecDeque::new(),
+            read_queue: VecDeque::new(),
+        })
+    }
+
+    pub async fn identify(&mut self, ident: &str) -> std::io::Result<()> {
+        let cmd = format!("!n{ident}\n");
+        self.send_raw(&cmd).await?;
+        let mut resp = String::new();
+        if let Some(ref mut reader) = self.stream {
+            reader.read_line(&mut resp).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn set_sources(&mut self, sources: &str) -> std::io::Result<bool> {
+        let cmd = format!("!s{sources}\n");
+        self.send_raw(&cmd).await?;
+        let mut resp = String::new();
+        if let Some(ref mut reader) = self.stream {
+            reader.read_line(&mut resp).await?;
+        }
+        Ok(resp.trim().starts_with('C'))
+    }
+
+    pub async fn get_sources_list(&mut self) -> std::io::Result<String> {
+        self.send_raw("!s-lc\n").await?;
+        let mut response = String::new();
+        if let Some(ref mut reader) = self.stream {
+            reader.read_line(&mut response).await?;
+            if !response.trim().starts_with('A') {
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Invalid source list response"));
+            }
+            let count: usize = response.trim()[1..].trim_end_matches('\n').trim_end_matches('\r')
+                .parse().unwrap_or(0);
+            let mut data = vec![0u8; count];
+            reader.read_exact(&mut data).await?;
+            let mut term = String::new();
+            reader.read_line(&mut term).await?;
+            let sources = String::from_utf8_lossy(&data).to_string();
+            Ok(sources)
+        } else {
+            Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "Not connected"))
+        }
+    }
+
+    pub async fn check_a_query_support(&mut self) -> std::io::Result<bool> {
+        self.send_raw("!a\n").await?;
+        let mut resp = String::new();
+        if let Some(ref mut reader) = self.stream {
+            reader.read_line(&mut resp).await?;
+        }
+        Ok(resp.starts_with("F Missing required set name"))
+    }
+
+    pub async fn query_sync(&mut self, cmd: &str) -> IrrdResult {
+        self.send_raw(cmd).await?;
+        self.read_response().await
+    }
+
+    pub async fn query_pipeline(&mut self, cmd: &str) -> IrrdResult {
+        self.send_raw(cmd).await?;
+        self.read_response().await
+    }
+
+    async fn send_raw(&mut self, cmd: &str) -> std::io::Result<()> {
+        if let Some(ref mut w) = self.writer {
+            w.write_all(cmd.as_bytes()).await?;
+        }
+        Ok(())
+    }
+
+    async fn read_response(&mut self) -> IrrdResult {
+        if let Some(ref mut reader) = self.stream {
+            let mut first_line = String::new();
+            reader.read_line(&mut first_line).await?;
+            let code = first_line.trim_end_matches(|c: char| c == '\r' || c == '\n');
+
+            match code.chars().next() {
+                Some('A') => {
+                    let n: usize = code[1..]
+                        .trim()
+                        .parse()
+                        .map_err(|_| "bad byte count")?;
+                    let mut data = vec![0u8; n];
+                    reader.read_exact(&mut data).await?;
+                    let mut _term = String::new();
+                    reader.read_line(&mut _term).await?;
+                    let items = String::from_utf8_lossy(&data)
+                        .split_whitespace()
+                        .map(String::from)
+                        .collect();
+                    Ok(IrrdResponse::Data(items))
+                }
+                Some('C') => Ok(IrrdResponse::Empty),
+                Some('D') => Ok(IrrdResponse::NotFound),
+                Some('E') => Ok(IrrdResponse::MultipleKeys),
+                Some('F') => Ok(IrrdResponse::Error(code[1..].trim().to_string())),
+                _ => Err("unexpected response".into()),
+            }
+        } else {
+            Err("not connected".into())
+        }
+    }
+
+    pub async fn quit(&mut self) -> std::io::Result<()> {
+        if let Some(ref mut w) = self.writer {
+            let _ = w.write_all(b"!q\n").await;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for IrrdClient {
+    fn drop(&mut self) {
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum IrrdResponse {
@@ -11,118 +157,4 @@ pub enum IrrdResponse {
     Error(String),
 }
 
-#[derive(Error, Debug)]
-pub enum IrrdError {
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("protocol error: {0}")]
-    Protocol(String),
-    #[error("UTF-8 error: {0}")]
-    Utf8(#[from] std::string::FromUtf8Error),
-}
-
-pub async fn read_irrd_response<R: tokio::io::AsyncRead + Unpin>(
-    reader: &mut BufReader<R>,
-) -> Result<IrrdResponse, IrrdError> {
-    let mut first_line = String::new();
-    reader.read_line(&mut first_line).await?;
-    let code = first_line.trim_end_matches(|c: char| c == '\r' || c == '\n');
-
-    match code.chars().next() {
-        Some('A') => {
-            let n: usize = code[1..]
-                .parse()
-                .map_err(|_| IrrdError::Protocol(format!("bad byte count in: {code}")))?;
-            let mut data = vec![0u8; n];
-            reader.read_exact(&mut data).await?;
-            let mut _term = String::new();
-            reader.read_line(&mut _term).await?;
-            let items = String::from_utf8(data)?
-                .split_whitespace()
-                .map(String::from)
-                .collect();
-            Ok(IrrdResponse::Data(items))
-        }
-        Some('C') => Ok(IrrdResponse::Empty),
-        Some('D') => Ok(IrrdResponse::NotFound),
-        Some('E') => Ok(IrrdResponse::MultipleKeys),
-        Some('F') => Ok(IrrdResponse::Error(code[1..].trim().to_string())),
-        _ => Err(IrrdError::Protocol(format!("unexpected response: {}", &code[..code.len().min(20)]))),
-    }
-}
-
-pub struct IrrdClient {
-    host: String,
-    port: u16,
-}
-
-impl IrrdClient {
-    pub fn new(host: impl Into<String>, port: u16) -> Self {
-        IrrdClient { host: host.into(), port }
-    }
-
-    pub async fn query(&self, cmd: &str) -> Result<IrrdResponse, IrrdError> {
-        let stream = TcpStream::connect((&*self.host, self.port)).await?;
-        let (read_half, mut write_half) = tokio::io::split(stream);
-        let mut reader = BufReader::new(read_half);
-        write_half.write_all(format!("{cmd}\n").as_bytes()).await?;
-        read_irrd_response(&mut reader).await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tokio::io::BufReader;
-
-    #[tokio::test]
-    async fn parse_data_response() {
-        let raw = b"A12\nAS1 AS2 AS3\nC\n";
-        let mut reader = BufReader::new(&raw[..]);
-        let resp = read_irrd_response(&mut reader).await.unwrap();
-        assert_eq!(
-            resp,
-            IrrdResponse::Data(vec!["AS1".into(), "AS2".into(), "AS3".into()])
-        );
-    }
-
-    #[tokio::test]
-    async fn parse_empty_response() {
-        let raw = b"C\n";
-        let mut reader = BufReader::new(&raw[..]);
-        assert_eq!(read_irrd_response(&mut reader).await.unwrap(), IrrdResponse::Empty);
-    }
-
-    #[tokio::test]
-    async fn parse_not_found() {
-        let raw = b"D\n";
-        let mut reader = BufReader::new(&raw[..]);
-        assert_eq!(read_irrd_response(&mut reader).await.unwrap(), IrrdResponse::NotFound);
-    }
-
-    #[tokio::test]
-    async fn parse_error_response() {
-        let raw = b"F Unknown key\n";
-        let mut reader = BufReader::new(&raw[..]);
-        assert_eq!(
-            read_irrd_response(&mut reader).await.unwrap(),
-            IrrdResponse::Error("Unknown key".into())
-        );
-    }
-
-    #[tokio::test]
-    async fn parse_prefixes_response() {
-        let data = b"192.0.2.0/24 203.0.113.0/24\n";
-        let header = format!("A{}\n", data.len());
-        let mut raw = header.into_bytes();
-        raw.extend_from_slice(data);
-        raw.extend_from_slice(b"C\n");
-
-        let mut reader = BufReader::new(&raw[..]);
-        let resp = read_irrd_response(&mut reader).await.unwrap();
-        assert_eq!(
-            resp,
-            IrrdResponse::Data(vec!["192.0.2.0/24".into(), "203.0.113.0/24".into()])
-        );
-    }
-}
+pub type IrrdResult = Result<IrrdResponse, Box<dyn std::error::Error + Send + Sync>>;

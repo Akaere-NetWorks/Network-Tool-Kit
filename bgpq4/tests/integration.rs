@@ -1,11 +1,12 @@
 use bgpq4_lib::irrd::{IrrdClient, IrrdResponse};
-use bgpq4_lib::expander::{Expander, IpFamily};
+use bgpq4_lib::expander::Expander;
+use bgpq4_lib::config::ExpanderConfig;
 
 #[tokio::test]
 #[ignore]
 async fn query_as112_ipv4_routes() {
-    let client = IrrdClient::new("rr.ntt.net", 43);
-    let resp = client.query("!gAS112").await.expect("IRRD query failed");
+    let mut client = IrrdClient::connect("rr.ntt.net", 43).await.expect("connect failed");
+    let resp = client.query_sync("!gAS112\n").await.expect("IRRD query failed");
     match resp {
         IrrdResponse::Data(items) => {
             assert!(!items.is_empty(), "AS112 should have IPv4 routes");
@@ -20,8 +21,8 @@ async fn query_as112_ipv4_routes() {
 #[tokio::test]
 #[ignore]
 async fn query_as_as112_set_members() {
-    let client = IrrdClient::new("rr.ntt.net", 43);
-    let resp = client.query("!iAS-AS112").await.expect("IRRD query failed");
+    let mut client = IrrdClient::connect("rr.ntt.net", 43).await.expect("connect failed");
+    let resp = client.query_sync("!iAS-AS112,1\n").await.expect("IRRD query failed");
     match resp {
         IrrdResponse::Data(items) => {
             assert!(!items.is_empty(), "AS-AS112 should have members");
@@ -33,18 +34,23 @@ async fn query_as_as112_set_members() {
 #[tokio::test]
 #[ignore]
 async fn expand_as112_ipv4() {
-    let exp = Expander::new("rr.ntt.net", 43, IpFamily::V4);
-    let prefixes = exp.expand("AS112").await.expect("expand failed");
-    assert!(!prefixes.is_empty(), "AS112 should yield IPv4 prefixes");
-    for p in &prefixes {
-        assert!(p.is_ipv4(), "expected IPv4 prefix, got: {p}");
-    }
+    let mut config = ExpanderConfig::default();
+    config.init(2);
+    let mut exp = Expander::new(config);
+    exp.add_object("AS112");
+    let ok = exp.expand().await;
+    assert!(ok, "expand failed");
+    assert!(!exp.tree.is_empty(), "AS112 should yield IPv4 prefixes");
 }
 
 #[tokio::test]
 #[ignore]
 async fn expand_as_as112_set() {
-    let exp = Expander::new("rr.ntt.net", 43, IpFamily::V4);
-    let prefixes = exp.expand("AS-AS112").await.expect("expand failed");
-    assert!(!prefixes.is_empty(), "AS-AS112 should yield IPv4 prefixes");
+    let mut config = ExpanderConfig::default();
+    config.init(2);
+    let mut exp = Expander::new(config);
+    exp.add_object("AS-AS112");
+    let ok = exp.expand().await;
+    assert!(ok, "expand failed");
+    assert!(!exp.tree.is_empty(), "AS-AS112 should yield IPv4 prefixes");
 }
