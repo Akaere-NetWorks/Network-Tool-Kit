@@ -1,0 +1,167 @@
+# CI workflow
+# GitHub 原生支持 [skip ci] / [ci skip] / [no ci] / [skip actions]，无需额外判断。
+
+name: CI
+
+on:
+  push:
+    branches: ["main", "master"]
+    tags-ignore: ["**"]
+  pull_request:
+    branches: ["main", "master"]
+
+# 同一 ref 新提交取消旧运行；PR 用 PR 号隔离，push 用 ref 隔离
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: stable
+
+jobs:
+  # ─────────────────────────────────────────────
+  # 1. 格式 / Lint / 测试（仅 linux 原生，快速反馈）
+  # ─────────────────────────────────────────────
+  check:
+    name: Check & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Rust ${{ env.RUST_TOOLCHAIN }}
+        uses: dtolnay/rust-toolchain@a54c7afa936fefeb4456b2dd8068152669aa8203 # stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy, rustfmt
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+  # ─────────────────────────────────────────────
+  # 2. 跨平台构建矩阵 + SHA256，bgpq4 / dig 分别上传
+  # ─────────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            ext: ""
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            ext: ""
+            cross: true
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            ext: ""
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            ext: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            ext: ".exe"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Rust ${{ env.RUST_TOOLCHAIN }}
+        uses: dtolnay/rust-toolchain@a54c7afa936fefeb4456b2dd8068152669aa8203 # stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+
+      - name: Install cross
+        if: matrix.cross == true
+        run: cargo install cross --locked
+
+      - name: Build (native)
+        if: matrix.cross != true
+        run: cargo build --release --target ${{ matrix.target }} --workspace
+
+      - name: Build (cross)
+        if: matrix.cross == true
+        run: cross build --release --target ${{ matrix.target }} --workspace
+
+      # ── bgpq4 ──────────────────────────────────
+      - name: Stage bgpq4
+        shell: bash
+        run: |
+          mkdir -p dist-bgpq4
+          cp "target/${{ matrix.target }}/release/bgpq4${{ matrix.ext }}" \
+             "dist-bgpq4/bgpq4${{ matrix.ext }}"
+          cd dist-bgpq4
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "bgpq4${{ matrix.ext }}" > "bgpq4${{ matrix.ext }}.sha256"
+          else
+            shasum -a 256 "bgpq4${{ matrix.ext }}" > "bgpq4${{ matrix.ext }}.sha256"
+          fi
+          cat "bgpq4${{ matrix.ext }}.sha256"
+
+      # artifact 名：binary-target-sha，跨平台 + 跨 commit 全部唯一
+      - name: Upload bgpq4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bgpq4-${{ matrix.target }}-${{ github.sha }}
+          path: dist-bgpq4/
+          retention-days: 7
+          if-no-files-found: error
+
+      # ── dig ────────────────────────────────────
+      - name: Stage dig
+        shell: bash
+        run: |
+          mkdir -p dist-dig
+          cp "target/${{ matrix.target }}/release/dig${{ matrix.ext }}" \
+             "dist-dig/dig${{ matrix.ext }}"
+          cd dist-dig
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "dig${{ matrix.ext }}" > "dig${{ matrix.ext }}.sha256"
+          else
+            shasum -a 256 "dig${{ matrix.ext }}" > "dig${{ matrix.ext }}.sha256"
+          fi
+          cat "dig${{ matrix.ext }}.sha256"
+
+      - name: Upload dig
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dig-${{ matrix.target }}-${{ github.sha }}
+          path: dist-dig/
+          retention-days: 7
+          if-no-files-found: error

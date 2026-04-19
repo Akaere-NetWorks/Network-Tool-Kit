@@ -1,0 +1,198 @@
+# Release workflow
+# 触发方式：推送符合 v*.*.* 格式的 tag，例如 git tag v0.2.0 && git push --tags
+# 产物命名：<binary>-<version>-<target>[.exe] + 对应 .sha256 校验文件
+# 上传策略：每个 binary 独立作为一个 artifact，release job 分别下载后统一发布
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"        # v1.2.3
+      - "v[0-9]+.[0-9]+.[0-9]+-*"      # v1.2.3-alpha.1
+
+# 每个 tag 唯一，不应互相取消
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ─────────────────────────────────────────────
+  # 1. 矩阵构建 + 分 binary 独立上传
+  # ─────────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            ext: ""
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            ext: ""
+            cross: true
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            ext: ""
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            ext: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            ext: ".exe"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@a54c7afa936fefeb4456b2dd8068152669aa8203 # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      # cache 跟随最新 tag 版本，不钉 SHA
+      # key 包含 target 三元组 + Cargo.lock hash，不同平台缓存隔离
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      # cross 用于 Linux 交叉编译（aarch64）
+      - name: Install cross
+        if: matrix.cross == true
+        run: cargo install cross --locked
+
+      - name: Build (native)
+        if: matrix.cross != true
+        run: cargo build --release --target ${{ matrix.target }} --workspace
+
+      - name: Build (cross)
+        if: matrix.cross == true
+        run: cross build --release --target ${{ matrix.target }} --workspace
+
+      # 从 tag（refs/tags/v1.2.3）提取版本号 1.2.3
+      - name: Extract version
+        id: version
+        shell: bash
+        run: echo "ver=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # ── bgpq4 ──────────────────────────────────
+      - name: Stage bgpq4
+        id: stage_bgpq4
+        shell: bash
+        run: |
+          src="target/${{ matrix.target }}/release/bgpq4${{ matrix.ext }}"
+          dst="bgpq4-${{ steps.version.outputs.ver }}-${{ matrix.target }}${{ matrix.ext }}"
+          mkdir -p dist-bgpq4
+          cp "$src" "dist-bgpq4/$dst"
+          # 生成 SHA256 校验文件，内容格式：<hash>  <filename>
+          cd dist-bgpq4
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$dst" > "${dst}.sha256"
+          else
+            shasum -a 256 "$dst" > "${dst}.sha256"
+          fi
+          echo "filename=$dst" >> "$GITHUB_OUTPUT"
+
+      # artifact 名：binary名-target，保证全局唯一，无需 merge-multiple
+      - name: Upload bgpq4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bgpq4-${{ matrix.target }}
+          path: dist-bgpq4/
+          retention-days: 1
+          if-no-files-found: error
+
+      # ── dig ────────────────────────────────────
+      - name: Stage dig
+        id: stage_dig
+        shell: bash
+        run: |
+          src="target/${{ matrix.target }}/release/dig${{ matrix.ext }}"
+          dst="dig-${{ steps.version.outputs.ver }}-${{ matrix.target }}${{ matrix.ext }}"
+          mkdir -p dist-dig
+          cp "$src" "dist-dig/$dst"
+          cd dist-dig
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$dst" > "${dst}.sha256"
+          else
+            shasum -a 256 "$dst" > "${dst}.sha256"
+          fi
+          echo "filename=$dst" >> "$GITHUB_OUTPUT"
+
+      - name: Upload dig
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dig-${{ matrix.target }}
+          path: dist-dig/
+          retention-days: 1
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────
+  # 2. 分别下载各 artifact，合并后创建 GitHub Release
+  # ─────────────────────────────────────────────
+  release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # 分别下载 bgpq4 和 dig 的所有平台产物，落到独立子目录
+      - name: Download bgpq4 artifacts
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+        with:
+          pattern: bgpq4-*
+          path: dist/bgpq4/
+          merge-multiple: true
+
+      - name: Download dig artifacts
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+        with:
+          pattern: dig-*
+          path: dist/dig/
+          merge-multiple: true
+
+      - name: List release assets
+        run: |
+          echo "=== bgpq4 ===" && ls -lh dist/bgpq4/
+          echo "=== dig ===" && ls -lh dist/dig/
+
+      # 生成跨 binary 的汇总 SHA256 清单（方便用户一次性校验所有产物）
+      - name: Generate combined SHA256 manifest
+        run: |
+          cd dist
+          find bgpq4 dig -name "*.sha256" -exec cat {} \; | sort > SHA256SUMS
+          echo "--- SHA256SUMS ---"
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            dist/bgpq4/*
+            dist/dig/*
+            dist/SHA256SUMS
