@@ -13,6 +13,12 @@ pub struct NodeWalkState {
     pub seq: u32,
 }
 
+impl Default for NodeWalkState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NodeWalkState {
     pub fn new() -> Self {
         NodeWalkState {

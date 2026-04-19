@@ -156,7 +156,7 @@ impl RecordType {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_name(s: &str) -> Option<Self> {
         let upper = s.to_uppercase();
         let s = upper.as_str();
         if let Some(rest) = s.strip_prefix("TYPE") {
@@ -581,7 +581,6 @@ pub fn build_query(name: &str, qtype: RecordType, cfg: &QueryConfig) -> Vec<u8> 
     }
 
     if cfg.edns {
-        let opt_rdlen_pos;
         buf.push(0x00);
         buf.extend_from_slice(&41u16.to_be_bytes());
         buf.extend_from_slice(&cfg.udp_bufsize.to_be_bytes());
@@ -592,7 +591,7 @@ pub fn build_query(name: &str, qtype: RecordType, cfg: &QueryConfig) -> Vec<u8> 
             z |= 0x8000;
         }
         buf.extend_from_slice(&z.to_be_bytes());
-        opt_rdlen_pos = buf.len();
+        let opt_rdlen_pos = buf.len();
         buf.extend_from_slice(&0u16.to_be_bytes());
 
         for opt in &cfg.edns_options {
@@ -770,7 +769,7 @@ fn parse_rdata(
 
     if rtype == RecordType::Opt {
         let udp_size = class;
-        let extended_rcode = rd.get(0).copied().unwrap_or(0);
+        let extended_rcode = rd.first().copied().unwrap_or(0);
         let edns_version = rd.get(1).copied().unwrap_or(0);
         let z = if rd.len() >= 4 {
             u16::from_be_bytes([rd[2], rd[3]])
@@ -1196,29 +1195,35 @@ mod tests {
 
     #[test]
     fn build_query_simple() {
-        let mut cfg = QueryConfig::default();
-        cfg.id = 0x1234;
-        cfg.ad = false;
-        cfg.edns = false;
+        let cfg = QueryConfig {
+            id: 0x1234,
+            ad: false,
+            edns: false,
+            ..Default::default()
+        };
         let q = build_query("x.y", RecordType::A, &cfg);
         assert_eq!(q, QUERY_XY_A);
     }
 
     #[test]
     fn build_query_no_recursion() {
-        let mut cfg = QueryConfig::default();
-        cfg.id = 0x1234;
-        cfg.rd = false;
-        cfg.edns = false;
+        let cfg = QueryConfig {
+            id: 0x1234,
+            rd: false,
+            edns: false,
+            ..Default::default()
+        };
         let q = build_query("x.y", RecordType::A, &cfg);
         assert_eq!(q[2], 0x00, "flags high byte should have RD=0");
     }
 
     #[test]
     fn build_query_multipart_name() {
-        let mut cfg = QueryConfig::default();
-        cfg.id = 0x0001;
-        cfg.edns = false;
+        let cfg = QueryConfig {
+            id: 0x0001,
+            edns: false,
+            ..Default::default()
+        };
         let q = build_query("a.b.c", RecordType::A, &cfg);
         let s = 12;
         assert_eq!(&q[s..s + 7], &[0x01, b'a', 0x01, b'b', 0x01, b'c', 0x00]);
@@ -1235,8 +1240,10 @@ mod tests {
 
     #[test]
     fn build_query_dnssec() {
-        let mut cfg = QueryConfig::default();
-        cfg.dnssec_ok = true;
+        let cfg = QueryConfig {
+            dnssec_ok: true,
+            ..Default::default()
+        };
         let q = build_query("x.y", RecordType::A, &cfg);
         assert!(q.len() > 24);
         let ar_count = u16::from_be_bytes([q[10], q[11]]);
@@ -1247,12 +1254,12 @@ mod tests {
     fn record_type_roundtrip() {
         assert_eq!(RecordType::from_u16(1), RecordType::A);
         assert_eq!(RecordType::A.to_u16(), 1);
-        assert_eq!(RecordType::from_str("AAAA"), Some(RecordType::Aaaa));
+        assert_eq!(RecordType::from_name("AAAA"), Some(RecordType::Aaaa));
         assert_eq!(RecordType::Aaaa.as_str(), "AAAA");
-        assert_eq!(RecordType::from_str("SRV"), Some(RecordType::Srv));
-        assert_eq!(RecordType::from_str("CAA"), Some(RecordType::Caa));
+        assert_eq!(RecordType::from_name("SRV"), Some(RecordType::Srv));
+        assert_eq!(RecordType::from_name("CAA"), Some(RecordType::Caa));
         assert_eq!(
-            RecordType::from_str("TYPE65432"),
+            RecordType::from_name("TYPE65432"),
             Some(RecordType::Other(65432))
         );
         assert_eq!(RecordType::Other(65432).to_u16(), 65432);

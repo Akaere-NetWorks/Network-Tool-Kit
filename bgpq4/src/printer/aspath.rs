@@ -675,14 +675,12 @@ pub fn print_huawei_oaspath(out: &mut String, exp: &Expander) {
     let mut nc = 0i32;
     let mut printed_self = false;
 
-    if !printed_self && exp.config.asnumber > 0 {
-        if exp.asn_list.contains(&exp.config.asnumber) {
-            out.push_str(&format!(
-                "ip as-path-filter {name} permit ^(_{})*$\n",
-                exp.config.asnumber
-            ));
-            printed_self = true;
-        }
+    if !printed_self && exp.config.asnumber > 0 && exp.asn_list.contains(&exp.config.asnumber) {
+        out.push_str(&format!(
+            "ip as-path-filter {name} permit ^(_{})*$\n",
+            exp.config.asnumber
+        ));
+        printed_self = true;
     }
 
     if exp.asn_list.is_empty() && !printed_self {
@@ -725,11 +723,9 @@ pub fn print_huawei_xpl_oaspath(out: &mut String, exp: &Expander) {
     let mut nc = 0i32;
     let mut comma = false;
 
-    if exp.config.asnumber > 0 {
-        if exp.asn_list.contains(&exp.config.asnumber) {
-            out.push_str(&format!("\n  regular ^(_{})*$", exp.config.asnumber));
-            comma = true;
-        }
+    if exp.config.asnumber > 0 && exp.asn_list.contains(&exp.config.asnumber) {
+        out.push_str(&format!("\n  regular ^(_{})*$", exp.config.asnumber));
+        comma = true;
     }
 
     let skip_self = exp.config.asnumber > 0;

@@ -57,7 +57,7 @@ pub fn print_aspath(out: &mut String, exp: &Expander) {
         Vendor::NokiaMd => aspath::print_nokia_md_aspath(out, exp),
         Vendor::Huawei => aspath::print_huawei_aspath(out, exp),
         Vendor::HuaweiXpl => aspath::print_huawei_xpl_aspath(out, exp),
-        _ => report::fatal(&format!("Unknown vendor for aspath")),
+        _ => report::fatal("Unknown vendor for aspath"),
     }
 }
 
@@ -71,7 +71,7 @@ pub fn print_oaspath(out: &mut String, exp: &Expander) {
         Vendor::NokiaMd => aspath::print_nokia_md_oaspath(out, exp),
         Vendor::Huawei => aspath::print_huawei_oaspath(out, exp),
         Vendor::HuaweiXpl => aspath::print_huawei_xpl_oaspath(out, exp),
-        _ => report::fatal(&format!("Unknown vendor for oaspath")),
+        _ => report::fatal("Unknown vendor for oaspath"),
     }
 }
 

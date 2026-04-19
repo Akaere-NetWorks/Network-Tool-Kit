@@ -131,21 +131,17 @@ impl Expander {
 
         if !self.config.sources.is_empty() {
             self.config.defaultsources = self.config.sources.clone();
-        } else if self.config.usesource || true {
-            match client.get_sources_list().await {
-                Ok(s) => self.config.defaultsources = s,
-                Err(_) => {}
-            }
+        } else if let Ok(s) = client.get_sources_list().await {
+            self.config.defaultsources = s;
         }
 
-        if !self.config.sources.is_empty() {
-            if !client
+        if !self.config.sources.is_empty()
+            && !client
                 .set_sources(&self.config.sources)
                 .await
                 .unwrap_or(false)
-            {
-                report::fatal(&format!("Invalid source(s) '{}'", self.config.sources));
-            }
+        {
+            report::fatal(&format!("Invalid source(s) '{}'", self.config.sources));
         }
 
         let mut rval = true;
@@ -306,11 +302,7 @@ impl Expander {
 }
 
 pub fn get_source(object: &str) -> Option<String> {
-    if let Some(pos) = object.find("::") {
-        Some(object[..pos].to_string())
-    } else {
-        None
-    }
+    object.find("::").map(|pos| object[..pos].to_string())
 }
 
 pub fn get_asset(object: &str) -> String {

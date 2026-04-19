@@ -58,15 +58,13 @@ pub fn print_routefilter(out: &mut String, exp: &Expander) {
 
             if !node.is_aggregate {
                 out.push_str(&format!("    {pfx}{prefix} exact;\n"));
+            } else if node.aggregate_low > node.prefix.masklen {
+                out.push_str(&format!(
+                    "    {pfx}{prefix} prefix-length-range /{}-/{};\n",
+                    node.aggregate_low, node.aggregate_hi
+                ));
             } else {
-                if node.aggregate_low > node.prefix.masklen {
-                    out.push_str(&format!(
-                        "    {pfx}{prefix} prefix-length-range /{}-/{};\n",
-                        node.aggregate_low, node.aggregate_hi
-                    ));
-                } else {
-                    out.push_str(&format!("    {pfx}{prefix} upto /{};\n", node.aggregate_hi));
-                }
+                out.push_str(&format!("    {pfx}{prefix} upto /{};\n", node.aggregate_hi));
             }
         });
     }
@@ -100,15 +98,13 @@ pub fn print_route_filter_list(out: &mut String, exp: &Expander) {
 
             if !node.is_aggregate {
                 out.push_str(&format!("    {prefix} exact;\n"));
+            } else if node.aggregate_low > node.prefix.masklen {
+                out.push_str(&format!(
+                    "    {prefix} prefix-length-range /{}-/{};\n",
+                    node.aggregate_low, node.aggregate_hi
+                ));
             } else {
-                if node.aggregate_low > node.prefix.masklen {
-                    out.push_str(&format!(
-                        "    {prefix} prefix-length-range /{}-/{};\n",
-                        node.aggregate_low, node.aggregate_hi
-                    ));
-                } else {
-                    out.push_str(&format!("    {prefix} upto /{};\n", node.aggregate_hi));
-                }
+                out.push_str(&format!("    {prefix} upto /{};\n", node.aggregate_hi));
             }
         });
     }

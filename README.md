@@ -42,6 +42,45 @@ Integration tests (requires network access):
 cargo test --workspace -- --include-ignored
 ```
 
+## Code Quality
+
+All pull requests and commits to `main` must pass the following checks (enforced by CI):
+
+### Formatting
+
+Code must be formatted with `rustfmt` using the default stable style:
+
+```
+cargo fmt --all -- --check
+```
+
+To auto-fix before committing:
+
+```
+cargo fmt --all
+```
+
+### Linting
+
+Code must pass `clippy` with no warnings treated as errors:
+
+```
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+Key rules enforced (non-exhaustive):
+
+| Rule | What it catches |
+|------|----------------|
+| `dead_code` | Unused fields, functions, types |
+| `clippy::manual_range_contains` | `x < 1 \|\| x > N` → `!(1..=N).contains(&x)` |
+| `clippy::should_implement_trait` | Methods named `from_str` that shadow `FromStr` |
+| `clippy::collapsible_if` / `collapsible_else_if` | Nested `if` blocks that can be merged |
+| `clippy::single_match` | `match` with one arm → `if let` |
+| `clippy::useless_format` | `format!("literal")` → `"literal".to_string()` |
+| `clippy::field_reassign_with_default` | Post-`default()` field assignment → struct literal |
+| `clippy::overly_complex_bool_expr` | Logic always true/false at compile time |
+
 ## License
 
 MIT — Copyright (c) 2026 Liu HaoRan — see [LICENSE](LICENSE)

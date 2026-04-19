@@ -1,20 +1,11 @@
-use std::collections::VecDeque;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
 pub type CallbackFn = Box<dyn Fn(&str, &mut Vec<u32>, &str) -> bool + Send + Sync>;
 
-pub struct Request {
-    pub request: String,
-    pub callback: Option<CallbackFn>,
-    pub depth: u32,
-}
-
 pub struct IrrdClient {
     stream: Option<BufReader<tokio::io::ReadHalf<TcpStream>>>,
     writer: Option<tokio::io::WriteHalf<TcpStream>>,
-    write_queue: VecDeque<String>,
-    read_queue: VecDeque<Request>,
 }
 
 impl IrrdClient {
@@ -30,8 +21,6 @@ impl IrrdClient {
         Ok(IrrdClient {
             stream: Some(reader),
             writer: Some(write_half),
-            write_queue: VecDeque::new(),
-            read_queue: VecDeque::new(),
         })
     }
 
@@ -61,10 +50,7 @@ impl IrrdClient {
         if let Some(ref mut reader) = self.stream {
             reader.read_line(&mut response).await?;
             if !response.trim().starts_with('A') {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Invalid source list response",
-                ));
+                return Err(std::io::Error::other("Invalid source list response"));
             }
             let count: usize = response.trim()[1..]
                 .trim_end_matches('\n')
@@ -115,7 +101,7 @@ impl IrrdClient {
         if let Some(ref mut reader) = self.stream {
             let mut first_line = String::new();
             reader.read_line(&mut first_line).await?;
-            let code = first_line.trim_end_matches(|c: char| c == '\r' || c == '\n');
+            let code = first_line.trim_end_matches(['\r', '\n']);
 
             match code.chars().next() {
                 Some('A') => {

@@ -28,16 +28,14 @@ pub fn print_prefixlist(out: &mut String, exp: &Expander) {
                     node.aggregate_low, node.aggregate_hi
                 ));
             }
+        } else if exp.config.vendor == Vendor::Mikrotik7 {
+            out.push_str(&format!(
+                "/routing filter rule add chain=\"{name}-{v}\" rule=\"if (dst=={prefix_sep}) {{accept}}\"\n"
+            ));
         } else {
-            if exp.config.vendor == Vendor::Mikrotik7 {
-                out.push_str(&format!(
-                    "/routing filter rule add chain=\"{name}-{v}\" rule=\"if (dst=={prefix_sep}) {{accept}}\"\n"
-                ));
-            } else {
-                out.push_str(&format!(
-                    "/routing filter add action=accept chain=\"{name}-{v}\" prefix={prefix_sep}\n"
-                ));
-            }
+            out.push_str(&format!(
+                "/routing filter add action=accept chain=\"{name}-{v}\" prefix={prefix_sep}\n"
+            ));
         }
     });
 }

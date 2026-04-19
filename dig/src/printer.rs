@@ -171,33 +171,18 @@ fn print_section(out: &mut String, name: &str, records: &[ResourceRecord], ctx: 
             continue;
         }
         let rdata_str = format_rdata(&rr.rdata, ctx.opts);
-        if ctx.opts.multiline {
-            out.push_str(&format!("{}\t", rr.name));
-            if ctx.opts.show_ttl {
-                if ctx.opts.ttl_units {
-                    out.push_str(&format!("{}\t", format_ttl_units(rr.ttl)));
-                } else {
-                    out.push_str(&format!("{}\t", rr.ttl));
-                }
+        out.push_str(&format!("{}\t", rr.name));
+        if ctx.opts.show_ttl {
+            if ctx.opts.ttl_units {
+                out.push_str(&format!("{}\t", format_ttl_units(rr.ttl)));
+            } else {
+                out.push_str(&format!("{}\t", rr.ttl));
             }
-            if ctx.opts.show_class {
-                out.push_str(&format!("{}\t", class_name(rr.class)));
-            }
-            out.push_str(&format!("{}\t{}\n", rr.rtype, rdata_str));
-        } else {
-            out.push_str(&format!("{}\t", rr.name));
-            if ctx.opts.show_ttl {
-                if ctx.opts.ttl_units {
-                    out.push_str(&format!("{}\t", format_ttl_units(rr.ttl)));
-                } else {
-                    out.push_str(&format!("{}\t", rr.ttl));
-                }
-            }
-            if ctx.opts.show_class {
-                out.push_str(&format!("{}\t", class_name(rr.class)));
-            }
-            out.push_str(&format!("{}\t{}\n", rr.rtype, rdata_str));
         }
+        if ctx.opts.show_class {
+            out.push_str(&format!("{}\t", class_name(rr.class)));
+        }
+        out.push_str(&format!("{}\t{}\n", rr.rtype, rdata_str));
     }
 }
 
@@ -504,7 +489,7 @@ fn decode_type_bitmap(bitmap: &[u8]) -> Vec<String> {
 
 fn base64_encode(data: &[u8]) -> String {
     const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut s = String::with_capacity((data.len() + 2) / 3 * 4);
+    let mut s = String::with_capacity(data.len().div_ceil(3) * 4);
     let chunks = data.chunks(3);
     for chunk in chunks {
         let b0 = chunk[0] as u32;

@@ -71,7 +71,7 @@ fn parse_asnumber(s: &str) -> u32 {
     if let Some(dot_pos) = s.find('.') {
         let hi: u32 = s[..dot_pos].parse().unwrap_or(0);
         let lo: u32 = s[dot_pos + 1..].parse().unwrap_or(0);
-        if hi < 1 || hi > 65535 || lo < 1 || lo > 65535 {
+        if !(1..=65535).contains(&hi) || !(1..=65535).contains(&lo) {
             report::fatal(&format!("Invalid AS number: {s}"));
         }
         asn = (hi << 16) + lo;
@@ -80,7 +80,7 @@ fn parse_asnumber(s: &str) -> u32 {
             report::fatal(&format!("Invalid AS number: {s}"));
         });
     }
-    if asn < 1 || asn > 65535u32 * 65535 {
+    if !(1..=65535u32 * 65535).contains(&asn) {
         report::fatal(&format!("Invalid AS number: {s}"));
     }
     asn

@@ -47,7 +47,7 @@ pub fn print_prefixlist(out: &mut String, exp: &Expander) {
 
         out.push_str("\n\t}");
         if use_name {
-            out.push_str("\"");
+            out.push('"');
         }
         out.push('\n');
     } else {

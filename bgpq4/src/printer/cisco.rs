@@ -174,7 +174,7 @@ pub fn print_eacl(out: &mut String, exp: &Expander) {
                 let wild_addr = 0xffffffffu32 >> node.prefix.masklen;
                 let wild_addr_be = wild_addr.to_be();
 
-                let mask_hi = 0xffffffffu32 & (0xffffffffu32 << (32 - node.aggregate_low));
+                let mask_hi = 0xffffffffu32 << (32 - node.aggregate_low);
                 let wild_mask =
                     (0xffffffffu32 >> node.aggregate_low) & !(0xffffffffu32 >> node.aggregate_hi);
 

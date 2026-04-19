@@ -43,12 +43,12 @@ fn parse_args(raw: &[String]) -> Result<DigArgs, String> {
     while i < raw.len() {
         let arg = &raw[i];
 
-        if arg.starts_with('@') {
-            args.server = Some(arg[1..].to_string());
-        } else if arg.starts_with('+') {
-            parse_plus_option(&mut args, &arg[1..])?;
-        } else if arg == "-4" {
-        } else if arg == "-6" {
+        if let Some(addr) = arg.strip_prefix('@') {
+            args.server = Some(addr.to_string());
+        } else if let Some(opt) = arg.strip_prefix('+') {
+            parse_plus_option(&mut args, opt)?;
+        } else if arg == "-4" || arg == "-6" {
+            // address-family flag, currently ignored
         } else if arg == "-p" {
             i += 1;
             if i >= raw.len() {
@@ -65,7 +65,7 @@ fn parse_args(raw: &[String]) -> Result<DigArgs, String> {
                 current_type = Some(RecordType::Ixfr);
             } else {
                 current_type = Some(
-                    RecordType::from_str(&t).ok_or_else(|| format!("unknown type: {}", raw[i]))?,
+                    RecordType::from_name(&t).ok_or_else(|| format!("unknown type: {}", raw[i]))?,
                 );
             }
         } else if arg == "-c" {
@@ -112,7 +112,7 @@ fn parse_args(raw: &[String]) -> Result<DigArgs, String> {
             print_help();
             std::process::exit(0);
         } else if !arg.starts_with('-') {
-            let maybe_type = RecordType::from_str(arg);
+            let maybe_type = RecordType::from_name(arg);
             if let Some(rt) = maybe_type {
                 if let Some(name) = current_name.take() {
                     args.names.push((name, rt, args.class));
@@ -290,7 +290,7 @@ fn parse_plus_option(args: &mut DigArgs, flag: &str) -> Result<(), String> {
 }
 
 fn parse_class(s: &str) -> Option<u16> {
-    match s.as_ref() {
+    match s {
         "IN" => Some(1),
         "CH" | "CHAOS" => Some(3),
         "HS" | "HESIOD" => Some(4),
@@ -326,7 +326,7 @@ fn rand_id() -> u16 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| (d.subsec_nanos() as u32 % 65536) as u16)
+        .map(|d| (d.subsec_nanos() % 65536) as u16)
         .unwrap_or(0x1234)
 }
 

@@ -11,6 +11,12 @@ pub struct SxPrefix {
     pub addrs: [u8; ADDR_BYTES],
 }
 
+impl Default for SxPrefix {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SxPrefix {
     pub fn new() -> Self {
         SxPrefix {
@@ -352,16 +358,14 @@ impl RadixTree {
                         self.nodes[child].parent = Some(chead);
                         return Some(child);
                     }
+                } else if self.nodes[chead].left.is_some() {
+                    chead = self.nodes[chead].left.unwrap();
+                    continue;
                 } else {
-                    if self.nodes[chead].left.is_some() {
-                        chead = self.nodes[chead].left.unwrap();
-                        continue;
-                    } else {
-                        let child = self.alloc_node(prefix);
-                        self.nodes[chead].left = Some(child);
-                        self.nodes[child].parent = Some(chead);
-                        return Some(child);
-                    }
+                    let child = self.alloc_node(prefix);
+                    self.nodes[chead].left = Some(child);
+                    self.nodes[child].parent = Some(chead);
+                    return Some(child);
                 }
             } else if eb == head_ml && eb == new_ml {
                 if self.nodes[chead].is_glue {
@@ -443,32 +447,36 @@ impl RadixTree {
                         self.nodes[l].is_glue = true;
                     }
                 }
-            } else if r_agg && l_agg && r_hi == l_hi && r_lo == l_lo {
-                if r_ml == node_ml + 1 && l_ml == node_ml + 1 {
-                    if node_is_glue {
-                        self.nodes[r].is_glue = true;
-                        self.nodes[l].is_glue = true;
-                        self.nodes[idx].is_aggregate = true;
-                        self.nodes[idx].is_glue = false;
-                        self.nodes[idx].aggregate_hi = r_hi;
-                        self.nodes[idx].aggregate_low = r_lo;
-                    } else if r_ml == r_lo {
-                        self.nodes[r].is_glue = true;
-                        self.nodes[l].is_glue = true;
-                        self.nodes[idx].is_aggregate = true;
-                        self.nodes[idx].aggregate_hi = r_hi;
-                        self.nodes[idx].aggregate_low = node_ml;
-                    } else {
-                        let prefix = self.nodes[idx].prefix.clone();
-                        let son = self.alloc_node(&prefix);
-                        self.nodes[son].is_glue = false;
-                        self.nodes[son].is_aggregate = true;
-                        self.nodes[son].aggregate_hi = r_hi;
-                        self.nodes[son].aggregate_low = r_lo;
-                        self.nodes[idx].son = Some(son);
-                        self.nodes[r].is_glue = true;
-                        self.nodes[l].is_glue = true;
-                    }
+            } else if r_agg
+                && l_agg
+                && r_hi == l_hi
+                && r_lo == l_lo
+                && r_ml == node_ml + 1
+                && l_ml == node_ml + 1
+            {
+                if node_is_glue {
+                    self.nodes[r].is_glue = true;
+                    self.nodes[l].is_glue = true;
+                    self.nodes[idx].is_aggregate = true;
+                    self.nodes[idx].is_glue = false;
+                    self.nodes[idx].aggregate_hi = r_hi;
+                    self.nodes[idx].aggregate_low = r_lo;
+                } else if r_ml == r_lo {
+                    self.nodes[r].is_glue = true;
+                    self.nodes[l].is_glue = true;
+                    self.nodes[idx].is_aggregate = true;
+                    self.nodes[idx].aggregate_hi = r_hi;
+                    self.nodes[idx].aggregate_low = node_ml;
+                } else {
+                    let prefix = self.nodes[idx].prefix.clone();
+                    let son = self.alloc_node(&prefix);
+                    self.nodes[son].is_glue = false;
+                    self.nodes[son].is_aggregate = true;
+                    self.nodes[son].aggregate_hi = r_hi;
+                    self.nodes[son].aggregate_low = r_lo;
+                    self.nodes[idx].son = Some(son);
+                    self.nodes[r].is_glue = true;
+                    self.nodes[l].is_glue = true;
                 }
             }
         }
@@ -626,12 +634,10 @@ impl RadixTree {
                 p.masklen + 1,
                 if maxlen > 0 {
                     maxlen
+                } else if af == 2 {
+                    32
                 } else {
-                    if af == 2 {
-                        32
-                    } else {
-                        128
-                    }
+                    128
                 },
             )
         } else if range_part.starts_with('+') {
@@ -639,12 +645,10 @@ impl RadixTree {
                 p.masklen,
                 if maxlen > 0 {
                     maxlen
+                } else if af == 2 {
+                    32
                 } else {
-                    if af == 2 {
-                        32
-                    } else {
-                        128
-                    }
+                    128
                 },
             )
         } else if range_part.as_bytes()[0].is_ascii_digit() {
@@ -671,12 +675,10 @@ impl RadixTree {
                 min_val = range_part.parse().unwrap_or(0);
                 max_val = if maxlen > 0 {
                     maxlen
+                } else if af == 2 {
+                    32
                 } else {
-                    if af == 2 {
-                        32
-                    } else {
-                        128
-                    }
+                    128
                 };
             }
             (min_val, max_val)

@@ -190,10 +190,9 @@ async fn send_doh(
     let body = resp.bytes().await?;
 
     if !status.is_success() {
-        return Err(ResolverError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("HTTP {status} from {url_used}"),
-        )));
+        return Err(ResolverError::Io(std::io::Error::other(format!(
+            "HTTP {status} from {url_used}"
+        ))));
     }
 
     let msg = dns::parse_message(&body[..])?;
@@ -289,8 +288,10 @@ pub async fn trace_query(
                 }
 
                 if next_servers.is_empty() {
-                    let mut resolve_cfg = QueryConfig::default();
-                    resolve_cfg.rd = true;
+                    let resolve_cfg = QueryConfig {
+                        rd: true,
+                        ..Default::default()
+                    };
                     let glue_query = build_query(glue_name, RecordType::A, &resolve_cfg);
                     let glue_server = ServerAddr::UdpTcp("8.8.8.8:53".parse().unwrap());
                     if let Ok(glue_result) =
