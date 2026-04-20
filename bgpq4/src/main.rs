@@ -261,19 +261,27 @@ fn main() {
                 report::fatal("-l requires an argument");
             }
             config.name = args[i].clone();
-        } else if let Some(rest) = arg.strip_prefix("-L") {
-            config.maxdepth = rest.parse().unwrap_or_else(|_| {
-                report::fatal(&format!("Invalid maximum recursion (-L): {rest}"));
+        } else if arg == "-L" {
+            i += 1;
+            if i >= args.len() {
+                report::fatal("-L requires an argument");
+            }
+            config.maxdepth = args[i].parse().unwrap_or_else(|_| {
+                report::fatal(&format!("Invalid maximum recursion (-L): {}", args[i]));
             });
             if config.maxdepth < 1 {
-                report::fatal(&format!("Invalid maximum recursion (-L): {rest}"));
+                report::fatal(&format!("Invalid maximum recursion (-L): {}", args[i]));
             }
-        } else if let Some(rest) = arg.strip_prefix("-m") {
-            let maxlen: u32 = rest.parse().unwrap_or_else(|_| {
-                report::fatal(&format!("Invalid maxlen (-m): {rest}"));
+        } else if arg == "-m" {
+            i += 1;
+            if i >= args.len() {
+                report::fatal("-m requires an argument");
+            }
+            let maxlen: u32 = args[i].parse().unwrap_or_else(|_| {
+                report::fatal(&format!("Invalid maxlen (-m): {}", args[i]));
             });
             if maxlen == 0 {
-                report::fatal(&format!("Invalid maxlen (-m): {rest}"));
+                report::fatal(&format!("Invalid maxlen (-m): {}", args[i]));
             }
             config.maxlen = maxlen;
         } else if arg == "-M" {
@@ -325,10 +333,14 @@ fn main() {
                 vendor_exclusive();
             }
             config.vendor = Vendor::HuaweiXpl;
-        } else if let Some(rest) = arg.strip_prefix("-W") {
-            let w: i32 = rest.parse().unwrap_or(0);
+        } else if arg == "-W" {
+            i += 1;
+            if i >= args.len() {
+                report::fatal("-W requires an argument");
+            }
+            let w: i32 = args[i].parse().unwrap_or(0);
             if w < 0 {
-                report::fatal(&format!("Invalid as-width: {rest}"));
+                report::fatal(&format!("Invalid as-width: {}", args[i]));
             }
             config.aswidth = w;
             width_set = true;
