@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["process", "rt-multi-thread", "macros", "sync"] }
+encoding_rs = "0.8"

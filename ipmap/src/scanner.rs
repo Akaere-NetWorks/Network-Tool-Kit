@@ -2,10 +2,22 @@ use std::net::Ipv4Addr;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
+fn decode_output(bytes: &[u8]) -> String {
+    #[cfg(windows)]
+    {
+        let (text, _, _) = encoding_rs::GBK.decode(bytes);
+        text.into_owned()
+    }
+    #[cfg(not(windows))]
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
 pub struct PingResult {
     pub ip: Ipv4Addr,
     pub alive: bool,
     pub latency_ms: Option<u32>,
+    pub raw_output: String,
+    pub exit_code: Option<i32>,
 }
 
 pub fn parse_cidr(cidr: &str) -> Result<Vec<Ipv4Addr>, String> {
@@ -49,7 +61,6 @@ async fn ping_one(ip: Ipv4Addr, timeout_ms: u32, count: u32) -> PingResult {
             .output()
             .await
     } else {
-        // Linux -W is in seconds; round up from ms, minimum 1s
         let timeout_sec = timeout_ms.div_ceil(1000).max(1).to_string();
         tokio::process::Command::new("ping")
             .args(["-c", &count_str, "-W", &timeout_sec, &ip_str])
@@ -59,26 +70,36 @@ async fn ping_one(ip: Ipv4Addr, timeout_ms: u32, count: u32) -> PingResult {
 
     let output = match output {
         Ok(o) => o,
-        Err(_) => {
+        Err(e) => {
             return PingResult {
                 ip,
                 alive: false,
                 latency_ms: None,
+                raw_output: format!("failed to spawn ping: {e}"),
+                exit_code: None,
             }
         }
     };
 
+    let exit_code = output.status.code();
     let alive = output.status.success();
-    let latency_ms = if alive {
-        parse_latency(&String::from_utf8_lossy(&output.stdout))
+    let stdout = decode_output(&output.stdout);
+    let stderr = decode_output(&output.stderr);
+
+    let raw_output = if stderr.is_empty() {
+        stdout.clone()
     } else {
-        None
+        format!("{stdout}--- stderr ---\n{stderr}")
     };
+
+    let latency_ms = if alive { parse_latency(&stdout) } else { None };
 
     PingResult {
         ip,
         alive,
         latency_ms,
+        raw_output,
+        exit_code,
     }
 }
 
@@ -95,7 +116,6 @@ fn parse_latency(output: &str) -> Option<u32> {
                 end += 1;
             }
             if end > start {
-                // expect "ms" after digits (possibly with spaces)
                 let mut j = end;
                 while j < bytes.len() && bytes[j] == b' ' {
                     j += 1;
@@ -111,7 +131,6 @@ fn parse_latency(output: &str) -> Option<u32> {
                     }
                 }
             } else if bytes[i] == b'<' {
-                // "<1ms" where digit parsing failed — treat as 0
                 return Some(0);
             }
         }
@@ -126,6 +145,7 @@ pub async fn scan(
     count: u32,
     concurrency: usize,
     quiet: bool,
+    debug: bool,
 ) -> Vec<PingResult> {
     let total = ips.len();
     let sem = Arc::new(Semaphore::new(concurrency));
@@ -140,7 +160,15 @@ pub async fn scan(
             let _permit = sem.acquire().await.unwrap();
             let result = ping_one(ip, timeout_ms, count).await;
             let done = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-            if !quiet {
+            if debug {
+                eprintln!(
+                    "[DEBUG] [{done}/{total}] {} alive={} latency={:?} exit={:?}",
+                    result.ip, result.alive, result.latency_ms, result.exit_code
+                );
+                for line in result.raw_output.lines() {
+                    eprintln!("[DEBUG]   {line}");
+                }
+            } else if !quiet {
                 eprint!("\rScanning... [{done}/{total}]");
             }
             result
@@ -155,12 +183,10 @@ pub async fn scan(
         }
     }
 
-    if !quiet {
-        // clear progress line
+    if !quiet && !debug {
         eprint!("\r{}\r", " ".repeat(30));
     }
 
-    // sort by IP for consistent output
     results.sort_by_key(|r| u32::from(r.ip));
     results
 }
