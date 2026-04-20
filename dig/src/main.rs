@@ -3,9 +3,8 @@ use dig_lib::{
     printer::{self, PrintContext, PrintOpts},
     resolver::{self, parse_server, ResolverConfig, ServerAddr},
 };
-use std::time::Instant;
 
-const VERSION: &str = "dig 0.1.0 (Network Tool Kit)";
+const VERSION: &str = "0.1.0";
 
 struct DigArgs {
     server: Option<String>,
@@ -106,7 +105,7 @@ fn parse_args(raw: &[String]) -> Result<DigArgs, String> {
         } else if arg == "-u" {
             args.use_usec = true;
         } else if arg == "-v" || arg == "--version" {
-            println!("{VERSION}");
+            println!("DiG {VERSION}");
             std::process::exit(0);
         } else if arg == "-h" || arg == "--help" {
             print_help();
@@ -333,7 +332,11 @@ fn rand_id() -> u16 {
 #[tokio::main]
 async fn main() {
     let raw: Vec<String> = std::env::args().collect();
-    let cmdline = raw.join(" ");
+    let cmdline = if raw.len() > 1 {
+        raw[1..].join(" ")
+    } else {
+        String::new()
+    };
 
     let args = match parse_args(&raw) {
         Ok(a) => a,
@@ -379,11 +382,15 @@ async fn main() {
             let tmp_ctx = PrintContext {
                 opts: &tmp_opts,
                 server: &server_host,
-                query_time_ms: None,
+                query_time_us: None,
                 query_bytes: None,
                 response_bytes: None,
                 server_addr: None,
                 cmdline: None,
+                is_query: true,
+                use_tcp: args.resolver_config.use_tcp,
+                user_arg: None,
+                address_count: 0,
             };
             let tmp_msg =
                 dig_lib::dns::parse_message(&query).unwrap_or_else(|_| dig_lib::dns::Message {
@@ -403,7 +410,7 @@ async fn main() {
             print!("{}", printer::print_message(&tmp_ctx, &tmp_msg));
         }
 
-        let start = Instant::now();
+        let start = std::time::Instant::now();
         let result = match resolver::send_query(&server, &query, &args.resolver_config).await {
             Ok(r) => r,
             Err(e) => {
@@ -411,16 +418,14 @@ async fn main() {
                 std::process::exit(1);
             }
         };
-        let elapsed = if args.use_usec {
-            start.elapsed().as_micros() as u64
-        } else {
-            start.elapsed().as_millis() as u64
-        };
+        let elapsed_us = start.elapsed().as_micros() as u64;
+
+        let user_arg = args.server.as_deref();
 
         let ctx = PrintContext {
             opts: &args.print_opts,
             server: &server_host,
-            query_time_ms: Some(elapsed),
+            query_time_us: Some(elapsed_us),
             query_bytes: Some(result.query_bytes),
             response_bytes: Some(result.response_bytes),
             server_addr: Some(server_host.clone()),
@@ -429,6 +434,10 @@ async fn main() {
             } else {
                 None
             },
+            is_query: false,
+            use_tcp: args.resolver_config.use_tcp,
+            user_arg,
+            address_count: if args.server.is_some() { 1 } else { 0 },
         };
 
         if args.print_opts.short {
@@ -475,7 +484,7 @@ async fn run_trace(args: &DigArgs, _server_host: &str, _server: &ServerAddr, cmd
             let ctx = PrintContext {
                 opts: &args.print_opts,
                 server: server_str,
-                query_time_ms: None,
+                query_time_us: None,
                 query_bytes: Some(result.query_bytes),
                 response_bytes: Some(result.response_bytes),
                 server_addr: None,
@@ -484,6 +493,10 @@ async fn run_trace(args: &DigArgs, _server_host: &str, _server: &ServerAddr, cmd
                 } else {
                     None
                 },
+                is_query: false,
+                use_tcp: false,
+                user_arg: None,
+                address_count: 0,
             };
 
             if !args.print_opts.short {

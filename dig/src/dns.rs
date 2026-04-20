@@ -386,6 +386,11 @@ pub enum Rdata {
         replacement: String,
     },
     Opt(EdnsOpt),
+    Svcb {
+        priority: u16,
+        target: String,
+        params: Vec<SvcParam>,
+    },
     Unknown(Vec<u8>),
 }
 
@@ -403,6 +408,25 @@ pub struct EdnsOpt {
 pub struct EdnsOption {
     pub code: u16,
     pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SvcParamValue {
+    Mandatory(Vec<u16>),
+    Alpn(Vec<Vec<u8>>),
+    NoDefaultAlpn,
+    Port(u16),
+    Ipv4Hint(Vec<std::net::Ipv4Addr>),
+    Ipv6Hint(Vec<std::net::Ipv6Addr>),
+    Ech(Vec<u8>),
+    DohPath(Vec<u8>),
+    Other(u16, Vec<u8>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SvcParam {
+    pub key: u16,
+    pub value: SvcParamValue,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1122,7 +1146,104 @@ fn parse_rdata(
                 altitude,
             })
         }
+        RecordType::Svcb | RecordType::Https => {
+            if rd.len() < 2 {
+                return Err(DnsError::Short(offset));
+            }
+            let priority = u16::from_be_bytes([rd[0], rd[1]]);
+            let (target, pos1) = parse_name(buf, offset + 2)?;
+            let params_data = &buf[pos1..offset + rdlen];
+            let params = parse_svc_params(params_data)?;
+            Ok(Rdata::Svcb {
+                priority,
+                target,
+                params,
+            })
+        }
         _ => Ok(Rdata::Unknown(rd.to_vec())),
+    }
+}
+
+fn parse_svc_params(data: &[u8]) -> Result<Vec<SvcParam>, DnsError> {
+    let mut params = Vec::new();
+    let mut i = 0usize;
+    while i + 4 <= data.len() {
+        let key = u16::from_be_bytes([data[i], data[i + 1]]);
+        let plen = u16::from_be_bytes([data[i + 2], data[i + 3]]) as usize;
+        i += 4;
+        if i + plen > data.len() {
+            break;
+        }
+        let pdata = &data[i..i + plen];
+        let value = parse_svc_param_value(key, pdata)?;
+        params.push(SvcParam { key, value });
+        i += plen;
+    }
+    Ok(params)
+}
+
+fn parse_svc_param_value(key: u16, data: &[u8]) -> Result<SvcParamValue, DnsError> {
+    match key {
+        0 => {
+            let mut keys = Vec::new();
+            let mut j = 0usize;
+            while j + 2 <= data.len() {
+                let k = u16::from_be_bytes([data[j], data[j + 1]]);
+                keys.push(k);
+                j += 2;
+            }
+            Ok(SvcParamValue::Mandatory(keys))
+        }
+        1 => {
+            let mut protos = Vec::new();
+            let mut j = 0usize;
+            while j < data.len() {
+                let plen = data[j] as usize;
+                j += 1;
+                if j + plen > data.len() {
+                    break;
+                }
+                protos.push(data[j..j + plen].to_vec());
+                j += plen;
+            }
+            Ok(SvcParamValue::Alpn(protos))
+        }
+        2 => Ok(SvcParamValue::NoDefaultAlpn),
+        3 => {
+            if data.len() < 2 {
+                return Ok(SvcParamValue::Other(key, data.to_vec()));
+            }
+            let port = u16::from_be_bytes([data[0], data[1]]);
+            Ok(SvcParamValue::Port(port))
+        }
+        4 => {
+            let mut addrs = Vec::new();
+            let mut j = 0usize;
+            while j + 4 <= data.len() {
+                addrs.push(Ipv4Addr::new(
+                    data[j],
+                    data[j + 1],
+                    data[j + 2],
+                    data[j + 3],
+                ));
+                j += 4;
+            }
+            Ok(SvcParamValue::Ipv4Hint(addrs))
+        }
+        5 => Ok(SvcParamValue::Ech(data.to_vec())),
+        6 => {
+            let mut addrs = Vec::new();
+            let mut j = 0usize;
+            while j + 16 <= data.len() {
+                let mut bytes = [0u8; 16];
+                bytes.copy_from_slice(&data[j..j + 16]);
+                addrs.push(Ipv6Addr::from(bytes));
+                j += 16;
+            }
+            Ok(SvcParamValue::Ipv6Hint(addrs))
+        }
+        7 => Ok(SvcParamValue::DohPath(data.to_vec())),
+        _ => Ok(SvcParamValue::Other(key, data.to_vec())),
     }
 }
 
@@ -1142,8 +1263,8 @@ fn parse_char_string(rd: &[u8], i: &mut usize) -> String {
     s
 }
 
-pub fn rcode_name(rcode: u8) -> &'static str {
-    match rcode {
+pub fn rcode_name(rcode: u8) -> String {
+    let name = match rcode {
         0 => "NOERROR",
         1 => "FORMERR",
         2 => "SERVFAIL",
@@ -1155,6 +1276,11 @@ pub fn rcode_name(rcode: u8) -> &'static str {
         8 => "NXRRSET",
         9 => "NOTAUTH",
         10 => "NOTZONE",
+        11 => "RESERVED11",
+        12 => "RESERVED12",
+        13 => "RESERVED13",
+        14 => "RESERVED14",
+        15 => "RESERVED15",
         16 => "BADVERS",
         17 => "BADKEY",
         18 => "BADTIME",
@@ -1163,8 +1289,9 @@ pub fn rcode_name(rcode: u8) -> &'static str {
         21 => "BADALG",
         22 => "BADTRUNC",
         23 => "BADCOOKIE",
-        _ => "UNKNOWN",
-    }
+        _ => return format!("?{rcode}"),
+    };
+    name.to_string()
 }
 
 pub fn opcode_name(opcode: u8) -> &'static str {
@@ -1172,8 +1299,19 @@ pub fn opcode_name(opcode: u8) -> &'static str {
         0 => "QUERY",
         1 => "IQUERY",
         2 => "STATUS",
+        3 => "RESERVED3",
         4 => "NOTIFY",
         5 => "UPDATE",
+        6 => "RESERVED6",
+        7 => "RESERVED7",
+        8 => "RESERVED8",
+        9 => "RESERVED9",
+        10 => "RESERVED10",
+        11 => "RESERVED11",
+        12 => "RESERVED12",
+        13 => "RESERVED13",
+        14 => "RESERVED14",
+        15 => "RESERVED15",
         _ => "UNKNOWN",
     }
 }
