@@ -184,3 +184,31 @@ jobs:
           path: dist-dig/
           retention-days: 7
           if-no-files-found: error
+
+      # ── ipmap ──────────────────────────────────
+      - name: Stage ipmap
+        shell: bash
+        run: |
+          mkdir -p dist-ipmap
+          cp "target/${{ matrix.target }}/release/ipmap${{ matrix.ext }}" \
+             "dist-ipmap/ipmap${{ matrix.ext }}"
+          cd dist-ipmap
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "ipmap${{ matrix.ext }}" > "ipmap${{ matrix.ext }}.sha256"
+          else
+            shasum -a 256 "ipmap${{ matrix.ext }}" > "ipmap${{ matrix.ext }}.sha256"
+          fi
+          cat "ipmap${{ matrix.ext }}.sha256"
+
+      - name: Attest ipmap
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: dist-ipmap/ipmap${{ matrix.ext }}
+
+      - name: Upload ipmap
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ipmap-${{ matrix.target }}-${{ github.sha }}
+          path: dist-ipmap/
+          retention-days: 7
+          if-no-files-found: error

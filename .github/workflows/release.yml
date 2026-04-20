@@ -154,6 +154,36 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+      # ── ipmap ──────────────────────────────────
+      - name: Stage ipmap
+        id: stage_ipmap
+        shell: bash
+        run: |
+          src="target/${{ matrix.target }}/release/ipmap${{ matrix.ext }}"
+          dst="ipmap-${{ steps.version.outputs.ver }}-${{ matrix.target }}${{ matrix.ext }}"
+          mkdir -p dist-ipmap
+          cp "$src" "dist-ipmap/$dst"
+          cd dist-ipmap
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$dst" > "${dst}.sha256"
+          else
+            shasum -a 256 "$dst" > "${dst}.sha256"
+          fi
+          echo "filename=$dst" >> "$GITHUB_OUTPUT"
+
+      - name: Attest ipmap
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: dist-ipmap/${{ steps.stage_ipmap.outputs.filename }}
+
+      - name: Upload ipmap
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ipmap-${{ matrix.target }}
+          path: dist-ipmap/
+          retention-days: 1
+          if-no-files-found: error
+
   # ─────────────────────────────────────────────
   # 2. 分别下载各 artifact，合并后创建 GitHub Release
   # ─────────────────────────────────────────────
@@ -182,15 +212,23 @@ jobs:
           path: dist/dig/
           merge-multiple: true
 
+      - name: Download ipmap artifacts
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+        with:
+          pattern: ipmap-*
+          path: dist/ipmap/
+          merge-multiple: true
+
       - name: List release assets
         run: |
           echo "=== bgpq4 ===" && ls -lh dist/bgpq4/
           echo "=== dig ===" && ls -lh dist/dig/
+          echo "=== ipmap ===" && ls -lh dist/ipmap/
 
       - name: Generate combined SHA256 manifest
         run: |
           cd dist
-          find bgpq4 dig -name "*.sha256" -exec cat {} \; | sort > SHA256SUMS
+          find bgpq4 dig ipmap -name "*.sha256" -exec cat {} \; | sort > SHA256SUMS
           echo "--- SHA256SUMS ---"
           cat SHA256SUMS
 
@@ -203,4 +241,5 @@ jobs:
           files: |
             dist/bgpq4/*
             dist/dig/*
+            dist/ipmap/*
             dist/SHA256SUMS
